@@ -1,0 +1,1415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive 3D grain-by-grain simulation of an hourglass holding iron filings and zirconia beads in uniform, gradient (anti-Helmholtz, wire, magnet) and time-varying magnetic fields. Runs entirely in the browser.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Magnetic Hourglass Lab">
+<meta property="og:description" content="Interactive 3D grain-by-grain simulation of an hourglass holding iron filings and zirconia beads in uniform, gradient (anti-Helmholtz, wire, magnet) and time-varying magnetic fields. Runs entirely in the browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M7 3h18v3.5L18.5 16 25 25.5V29H7v-3.5L13.5 16 7 6.5z' fill='%232a78d6'/%3E%3Cpath d='M11 26h10l-5-7z' fill='%23eb6834'/%3E%3C/svg%3E">
+<title>Magnetic Hourglass Lab</title>
+
+<style>
+/* Layout: lab bench. 3D viewport + four live plots on the left, instrument panel of grouped sliders on the right. */
+:root {
+  --bg: #eef1f5; --panel: #ffffff; --panel-2: #f6f8fb; --fg: #18212d; --muted: #5a6575; --line: #d7dde6;
+  --accent: #2a78d6; --accent-ink: #ffffff; --field: #eb6834; --aqua: #1baf7a; --warn: #b4441a; --good: #0b7d3e;
+  --iron: #45505f; --bead: #ece6d6; --stage: #1f2a37; --stage-ink: #dfe6ef; --grid: #e6eaf0;
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --panel: #161d27; --panel-2: #1b2430; --fg: #e5eaf1; --muted: #9aa6b6; --line: #2a3441;
+    --accent: #3987e5; --accent-ink: #ffffff; --field: #d95926; --aqua: #199e70; --warn: #ec835a; --good: #3ccf7a;
+    --iron: #7f8ea3; --bead: #e9e3d3; --stage: #121a24; --stage-ink: #cfd8e3; --grid: #222c38; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --panel: #161d27; --panel-2: #1b2430; --fg: #e5eaf1; --muted: #9aa6b6; --line: #2a3441;
+  --accent: #3987e5; --accent-ink: #ffffff; --field: #d95926; --aqua: #199e70; --warn: #ec835a; --good: #3ccf7a;
+  --iron: #7f8ea3; --bead: #e9e3d3; --stage: #121a24; --stage-ink: #cfd8e3; --grid: #222c38; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 28px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin: 0 auto 12px; max-width: 1480px; }
+header.top h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+header.top p { margin: 0; color: var(--muted); max-width: 70ch; }
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; max-width: 1480px; margin: 0 auto; }
+@media (max-width: 980px) { .app { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+/* stage */
+.stage { position: relative; background: var(--stage); border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 10; max-width: 100%; min-height: 320px; }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.stage canvas:active { cursor: grabbing; }
+.hud { position: absolute; left: 12px; top: 10px; color: var(--stage-ink); font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
+  background: rgba(10, 16, 24, 0.55); padding: 7px 10px; border-radius: 7px; pointer-events: none; }
+.hud b { color: #ffffff; font-weight: 500; }
+.hud .state { display: inline-block; padding: 0 6px; border-radius: 4px; background: rgba(255,255,255,0.12); margin-left: 4px; }
+.stagebar { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.stagebar button { font: 500 12px var(--font-body); color: var(--stage-ink); background: rgba(10,16,24,0.55); border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px; padding: 5px 9px; cursor: pointer; }
+.stagebar button[aria-pressed="true"] { background: rgba(57,135,229,0.85); border-color: rgba(255,255,255,0.35); color: #fff; }
+.legend3d { position: absolute; left: 12px; bottom: 10px; display: flex; gap: 12px; color: var(--stage-ink); font-size: 12px;
+  background: rgba(10,16,24,0.55); padding: 5px 10px; border-radius: 7px; pointer-events: none; flex-wrap: wrap; }
+.legend3d span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+/* plots */
+.plots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+@media (max-width: 640px) { .plots { grid-template-columns: minmax(0, 1fr); }
+  .stage { aspect-ratio: 4 / 5; }
+  .hud { font-size: 11px; right: 12px; }
+  .stagebar { top: auto; bottom: 36px; right: 8px; left: 8px; }
+  .legend3d { font-size: 11px; gap: 8px; } }
+.plot { padding: 10px 12px 8px; min-width: 0; }
+.plot h3 { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.plot h3 .num { font-size: 12px; color: var(--muted); font-weight: 400; }
+.plot canvas { width: 100%; height: 150px; display: block; margin-top: 6px; }
+.plot .note { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+/* panel */
+.panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.group { padding: 12px 14px; }
+.group h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; margin: 9px 0 2px; }
+.row label { font-weight: 500; }
+.row output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--fg); }
+.row input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 2px 0 0; }
+.hint { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+.seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 4px; background: var(--panel-2); padding: 3px; border-radius: 8px; border: 1px solid var(--line); }
+.seg button { font: 500 12.5px var(--font-body); border: 0; border-radius: 6px; padding: 6px 6px; background: transparent; color: var(--fg); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font: 600 13px var(--font-body); border-radius: 8px; padding: 8px 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; font-size: 13px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.chip { display: inline-block; font: 600 11.5px var(--font-body); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.chip.free { color: var(--good); border-color: currentColor; }
+.chip.coh { color: var(--accent); border-color: currentColor; }
+.chip.near { color: var(--field); border-color: currentColor; }
+.chip.arrest { color: var(--warn); border-color: currentColor; }
+details.adv summary { cursor: pointer; font-weight: 600; color: var(--muted); font-size: 12.5px; }
+.check { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+.sub { border-left: 2px solid var(--line); padding-left: 10px; margin-top: 6px; }
+select { font: 500 13px var(--font-body); padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); width: 100%; }
+footer.foot { max-width: 1480px; margin: 16px auto 0; color: var(--muted); font-size: 12.5px; }
+footer.foot p { margin: 4px 0; max-width: 110ch; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+
+<header class="top">
+  <h1>Magnetic Hourglass Lab</h1>
+  <p>Iron filings and YTZP beads draining through the 4&nbsp;mm neck of a 14&deg; hourglass, simulated grain by grain. Change the mixture, the field source and its time dependence while it runs.</p>
+</header>
+
+<main class="app">
+  <section style="min-width:0">
+    <div class="stage" id="stage">
+      <canvas id="view" aria-label="3D view of the hourglass neck and grains"></canvas>
+      <div class="hud" id="hud" aria-live="polite">starting&hellip;</div>
+      <div class="stagebar">
+        <button id="bCut" aria-pressed="true" title="Show a thin vertical slice through the axis">Slice</button>
+        <button id="bMag" aria-pressed="false" title="Colour filings by their magnetic moment">Magnetisation</button>
+        <button id="bArrows" aria-pressed="true" title="Show the applied field">Field</button>
+        <button id="bView" title="Reset the camera">Reset view</button>
+      </div>
+      <div class="legend3d"><span><i class="dot" style="background:#596779"></i>iron filings</span><span><i class="dot" style="background:#efe8d6"></i>YTZP beads</span><span><i class="dot" style="background:#ff8a4c"></i>applied field</span></div>
+    </div>
+    <div class="plots">
+      <div class="card plot"><h3>Flow rate, grains/s <span class="num" id="pQ">&ndash;</span></h3><canvas id="cQ" aria-label="Flow rate against time"></canvas>
+        <p class="note">Against time in ms after the outlet opens; 2&tau; moving window. Dashed: rate Q<sub>0</sub> without field.</p></div>
+      <div class="card plot"><h3>Field at the neck, mT <span class="num" id="pB">&ndash;</span></h3><canvas id="cB" aria-label="Field at the neck against time"></canvas>
+        <p class="note">Magnitude of the applied field at the centre of the outlet, against time in ms.</p></div>
+      <div class="card plot"><h3>Iron fraction leaving the neck <span class="num" id="pP">&ndash;</span></h3><canvas id="cP" aria-label="Outflow iron fraction against time"></canvas>
+        <p class="note">Number fraction of filings in the outflow (4&tau; window) against time in ms. Dashed: fraction in the mixture.</p></div>
+      <div class="card plot"><h3><span>Flow curve, Q/Q<sub>0</sub> against |B| at the neck (mT)</span></h3><canvas id="cF" aria-label="Flow rate against field"></canvas>
+        <p class="note"><span style="color:var(--accent)">&#9679;</span> recorded runs, line: energy-budget model (Q/Q<sub>0</sub>)&sup2; = 1 &minus; (Bo<sub>m</sub>/Bo*)<sup>&nu;</sup>. Ramp mode draws a trace.</p></div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="card group">
+      <h2>Run</h2>
+      <div class="btns">
+        <button class="btn primary" id="bRun">Pause</button>
+        <button class="btn" id="bReset">Refill and restart</button>
+        <button class="btn" id="bRecord" title="Add the current steady flow to the flow curve">Record point</button>
+      </div>
+      <dl class="readout" style="margin-top:10px">
+        <dt>Flow rate</dt><dd id="rQ">&ndash;</dd>
+        <dt>Q / Q<sub>0</sub> (simulation)</dt><dd id="rQQ">&ndash;</dd>
+        <dt>Q / Q<sub>0</sub> (model)</dt><dd id="rModel">&ndash;</dd>
+        <dt>Regime</dt><dd id="rRegime">&ndash;</dd>
+        <dt>Bo at outlet &middot; at z<sub>p</sub></dt><dd id="rBo">&ndash;</dd>
+        <dt>Kelvin pull &Gamma;</dt><dd id="rGamma">&ndash;</dd>
+        <dt>Q<sub>0</sub> reference</dt><dd id="rQ0">&ndash;</dd>
+      </dl>
+    </div>
+
+    <div class="card group">
+      <h2>Field source</h2>
+      <div class="seg" id="srcSeg" role="group" aria-label="Field source">
+        <button data-v="0" aria-pressed="true">Uniform</button>
+        <button data-v="3" aria-pressed="false">Anti-Helmholtz</button>
+        <button data-v="4" aria-pressed="false">Wire</button>
+        <button data-v="2" aria-pressed="false">Magnet</button>
+      </div>
+      <div class="sub" id="srcUniform">
+        <div class="row"><label for="sB0">Field B<sub>0</sub></label><output id="oB0"></output><input type="range" id="sB0" min="0" max="15" step="0.1" value="4"></div>
+        <div class="row"><label for="sTheta">Angle from vertical</label><output id="oTheta"></output><input type="range" id="sTheta" min="0" max="90" step="5" value="0"></div>
+        <p class="hint">0&deg;: solenoid around the hourglass. 90&deg;: Helmholtz pair with a horizontal axis.</p>
+      </div>
+      <div class="sub" id="srcQuad" hidden>
+        <div class="row"><label for="sG">Gradient G</label><output id="oG"></output><input type="range" id="sG" min="0" max="1.5" step="0.01" value="0.3"></div>
+        <div class="row"><label for="sZn">Neck above the field zero</label><output id="oZn"></output><input type="range" id="sZn" min="-20" max="20" step="0.5" value="10"></div>
+        <div class="row"><label for="sQaxis">Coil axis</label><span></span><select id="sQaxis" style="grid-column:1/-1"><option value="0">Vertical (coaxial with the hourglass)</option><option value="1">Horizontal</option></select></div>
+        <p class="hint">B = G(z&minus;z<sub>0</sub>) along the axis, &minus;G r/2 across it. A uniform bias field along the axis only moves the zero.</p>
+      </div>
+      <div class="sub" id="srcWire" hidden>
+        <div class="row"><label for="sI">Current I</label><output id="oI"></output><input type="range" id="sI" min="0" max="300" step="1" value="60"></div>
+        <div class="row"><label for="sRw">Distance from the axis</label><output id="oRw"></output><input type="range" id="sRw" min="4" max="30" step="0.5" value="6"></div>
+        <div class="row"><label for="sWdir">Wire direction</label><span></span><select id="sWdir" style="grid-column:1/-1"><option value="0">Vertical, beside the neck</option><option value="1">Horizontal, level with the outlet</option></select></div>
+        <p class="hint">B = &mu;<sub>0</sub>I / 2&pi;r. A vertical wire gives a horizontal field at the neck, a horizontal wire a vertical one.</p>
+      </div>
+      <div class="sub" id="srcMagnet" hidden>
+        <div class="row"><label for="sBm">Field at the outlet</label><output id="oBm"></output><input type="range" id="sBm" min="0" max="30" step="0.5" value="6"></div>
+        <div class="row"><label for="sHm">Magnet below the outlet</label><output id="oHm"></output><input type="range" id="sHm" min="4" max="30" step="0.5" value="9"></div>
+        <p class="hint">Small NdFeB magnet on the axis, magnetised vertically (point dipole).</p>
+      </div>
+    </div>
+
+    <div class="card group">
+      <h2>Time dependence</h2>
+      <div class="seg" id="timeSeg" role="group" aria-label="Time dependence">
+        <button data-v="0" aria-pressed="true">Steady</button>
+        <button data-v="1" aria-pressed="false">Sine</button>
+        <button data-v="4" aria-pressed="false">DC + AC</button>
+        <button data-v="2" aria-pressed="false">On/off</button>
+        <button data-v="5" aria-pressed="false">Ramp</button>
+      </div>
+      <div class="sub" id="tFreq" hidden>
+        <div class="row"><label for="sF">Frequency f</label><output id="oF"></output><input type="range" id="sF" min="0.5" max="60" step="0.5" value="5"></div>
+      </div>
+      <div class="sub" id="tDcac" hidden>
+        <div class="row"><label for="sDc">DC part</label><output id="oDc"></output><input type="range" id="sDc" min="-1" max="1" step="0.05" value="0.7"></div>
+        <div class="row"><label for="sAc">AC amplitude</label><output id="oAc"></output><input type="range" id="sAc" min="0" max="1" step="0.05" value="0.5"></div>
+      </div>
+      <div class="sub" id="tRamp" hidden>
+        <div class="row"><label for="sRamp">Ramp time (0 &rarr; full field)</label><output id="oRamp"></output><input type="range" id="sRamp" min="100" max="1500" step="50" value="400"></div>
+        <p class="hint">Starts at the opening of the outlet. Refill to start a new ramp.</p>
+      </div>
+      <p class="hint" id="tHint">The field above is the amplitude B<sub>0</sub>; B(t) = B<sub>0</sub>&middot;s(t).</p>
+    </div>
+
+    <div class="card group">
+      <h2>Mixture and hourglass</h2>
+      <div class="row"><label for="sPhi">Iron fraction (by number)</label><output id="oPhi"></output><input type="range" id="sPhi" min="0" max="1" step="0.05" value="0.5"></div>
+      <div class="row"><label for="sD">Grain diameter d</label><output id="oD"></output><input type="range" id="sD" min="0.30" max="0.60" step="0.01" value="0.45"></div>
+      <div class="row"><label for="sSF">Filing shape factor s<sub>F</sub></label><output id="oSF"></output><input type="range" id="sSF" min="1" max="4" step="0.1" value="1"></div>
+      <div class="row"><label for="sMur">Filing rolling resistance</label><output id="oMur"></output><input type="range" id="sMur" min="0" max="0.3" step="0.01" value="0.15"></div>
+      <div class="row"><label for="sOut">Orifice diameter D</label><output id="oOut"></output><input type="range" id="sOut" min="3" max="6" step="0.1" value="4"></div>
+      <div class="row"><label for="sAlpha">Cone half-angle</label><output id="oAlpha"></output><input type="range" id="sAlpha" min="8" max="40" step="1" value="14"></div>
+      <div class="row"><label for="sH">Simulated fill height</label><output id="oH"></output><input type="range" id="sH" min="1.5" max="3" step="0.1" value="2"></div>
+      <p class="hint" id="geoHint">Changes here refill the hourglass.</p>
+      <details class="adv" style="margin-top:8px">
+        <summary>Model switches and contact parameters</summary>
+        <label class="check"><input type="checkbox" id="cMut" checked> Mutual induction between filings</label>
+        <label class="check"><input type="checkbox" id="cSik" checked> Near-contact force enhancement</label>
+        <label class="check"><input type="checkbox" id="cKel" checked> Kelvin force of field gradients</label>
+        <label class="check"><input type="checkbox" id="cRot" checked> Grain rotation</label>
+        <div class="row"><label for="sMu">Friction coefficient</label><output id="oMu"></output><input type="range" id="sMu" min="0.1" max="0.8" step="0.05" value="0.4"></div>
+        <div class="row"><label for="sE">Restitution</label><output id="oE"></output><input type="range" id="sE" min="0.1" max="0.9" step="0.05" value="0.3"></div>
+        <div class="row"><label for="sRc">Magnetic cutoff (d)</label><output id="oRc"></output><input type="range" id="sRc" min="1.5" max="3" step="0.1" value="2.5"></div>
+      </details>
+    </div>
+  </aside>
+</main>
+
+<footer class="foot">
+  <p><strong>What is simulated.</strong> Soft-sphere grains (linear spring&ndash;dashpot contacts with friction, rotation and rolling resistance) in a conical neck under constant head; grains that leave are put back on the free surface. Each filing carries a moment induced by the applied field plus the fields of filings within the cutoff, with the near-contact force enhancement of Sikka&nbsp;et&nbsp;al. and a local-field cap of 3B. Beads are non-magnetic and 24% lighter. The field of the whole magnetised charge, included in our full simulations, is left out here for speed.</p>
+  <p><strong>Units.</strong> Lengths scale with d, times with &tau; = &radic;(d/g) (6.8&nbsp;ms for 0.45&nbsp;mm). The magnetic Bond number Bo = s<sub>F</sub>(B/B<sub>1</sub>)&sup2; with B<sub>1</sub> = 4.4&nbsp;mT&middot;(d/0.45&nbsp;mm)<sup>1/2</sup> compares the contact attraction of two touching spheres along the field (18.8&nbsp;Bo&nbsp;mg) with a grain&rsquo;s weight.</p>
+  <p><strong>Model.</strong> (Q/Q<sub>0</sub>)&sup2; = 1 + &Gamma;<sub>m</sub> &minus; (Bo<sub>m</sub>/Bo*)<sup>&nu;</sup> with Bo<sub>m</sub> = &phi;<sup>&beta;</sup>(&rho;<sub>F</sub>/&rho;&#772;)Bo, using constants fitted to our full simulations of this hourglass. The cohesion is taken from the field about one neck diameter above the outlet (the probe height z<sub>p</sub>), where the grains break their bonds; the Kelvin pull &Gamma; from the gradient in the arch region. Time-dependent drives are averaged over a response window T<sub>w</sub> of about 3&tau; (20 ms).</p>
+  <p>The simulation runs entirely in your browser; nothing is sent anywhere. Speed depends on your computer; a desktop browser is best.</p>
+</footer>
+
+<script type="text/plain" id="engine-src">/* Magnetic hourglass DEM engine (browser / Node).
+   A JavaScript port of hgsim.c: soft-sphere DEM (linear spring-dashpot, tangential
+   history, Coulomb friction, rotation, rolling resistance) in a conical hopper,
+   with induced magnetic dipoles (mutual induction, near-contact enhancement,
+   local-field cap) and the Kelvin force of non-uniform applied fields.
+   Units: iron-grain diameter d = 1, g = 1, iron density = 1, time tau = sqrt(d/g).
+   Differences from hgsim.c: no bed-scale (far) field; all magnetic forces are
+   updated every `nmag` steps and held in between. */
+(function (root) {
+  'use strict';
+  const PI = Math.PI;
+  const EB1 = 0.2907, EB2 = -0.7685, EB3 = -2.9427;   // Sikka fit, perpendicular enhancement
+
+  function rng(seed) {                                   // xorshift64*
+    let s = BigInt(seed) * 0x9E3779B97F4A7C15n + 0x1234567n;
+    s &= 0xFFFFFFFFFFFFFFFFn; if (s === 0n) s = 1n;
+    return function () {
+      s ^= s >> 12n; s ^= (s << 25n) & 0xFFFFFFFFFFFFFFFFn; s ^= s >> 27n;
+      const r = (s * 0x2545F4914F6CDD1Dn) & 0xFFFFFFFFFFFFFFFFn;
+      return Number(r >> 11n) / 9007199254740992;
+    };
+  }
+
+  const DEFAULTS = {
+    Dd: 9, alpha: 14, Hbed: 18, Hcyl: 12, phi: 0.5, rhoZ: 6.0 / 7.87, poly: 0.1,
+    K: 2000, e: 0.3, mu: 0.4, muw: 0.4, murFe: 0.15, murZ: 0, rot: 1, cdt: 0.1, seed: 1,
+    // field
+    Bo: 0, theta: 0, azim: 0, gmode: 0, L: 30, zm: -20, q: -15, Lq: 15, xw: 15, zw: 0,
+    tmode: 0, freq: 0.05, sdc: 0.7, sac: 0.5, rampT: 60,
+    // magnetic model
+    mutual: 1, sikka: 1, kelvin: 1, Ec: 18.81, ell: 0.3, rc: 2.5, cap: 3, chi: 3, relax: 0.5, nmag: 2,
+    // run control
+    Tsettle: 5, zcount: -1, zremove: -6, skin: 0.25, skinM: 0.4, recdt: 0.05
+  };
+
+  function createSim(userCfg) {
+    const P = Object.assign({}, DEFAULTS, userCfg || {});
+    const urand = rng(P.seed || 1);
+    // ---------------------------------------------------------------- geometry
+    const ta = Math.tan(P.alpha * PI / 180), cosA = Math.cos(P.alpha * PI / 180);
+    const Rout = 0.5 * P.Dd;
+    const Hc = P.Hbed + 3;
+    const Rtop = Rout + Hc * ta;
+    let zTopWall = Hc + P.Hcyl;
+    // wall segments in (rho, z): cone, cylinder; plug at the outlet while settling
+    const seg = [[Rout, 0, Rtop, Hc], [Rtop, Hc, Rtop, zTopWall]];
+    const plugSeg = [0, 0, Rout + 0.5, 0];
+    function profileR(z) { if (z < 0) return Rout; if (z < Hc) return Rout + z * ta; return Rtop; }
+
+    // ---------------------------------------------------------------- grains
+    const vfe = (1 + P.poly * P.poly) * PI / 6;
+    const R1 = Rout + P.Hbed * ta;
+    const vol = PI * P.Hbed / 3 * (Rout * Rout + Rout * R1 + R1 * R1);
+    const N = Math.max(50, Math.floor(0.6 * vol / vfe));
+    const NFe = Math.floor(P.phi * N + 0.5);
+    const X = new Float64Array(3 * N), V = new Float64Array(3 * N), F = new Float64Array(3 * N);
+    const W = new Float64Array(3 * N), T = new Float64Array(3 * N);
+    const Ra = new Float64Array(N), Ma = new Float64Array(N), In = new Float64Array(N), MR = new Float64Array(N);
+    const Ty = new Uint8Array(N);
+    const S3 = new Float64Array(N), CI = new Float64Array(N);
+    const MU = new Float64Array(3 * N), HI = new Float64Array(3 * N), HN = new Float64Array(3 * N), FM = new Float64Array(3 * N);
+    for (let i = 0; i < N; i++) Ty[i] = i < NFe ? 1 : 0;
+    for (let i = N - 1; i > 0; i--) { const j = Math.floor(urand() * (i + 1)); const t = Ty[i]; Ty[i] = Ty[j]; Ty[j] = t; }
+    const magIdx = new Int32Array(NFe); { let k = 0; for (let i = 0; i < N; i++) if (Ty[i]) magIdx[k++] = i; }
+    let maxRad = 0, mmin = 1e9;
+    for (let i = 0; i < N; i++) {
+      Ra[i] = 0.5 * (1 + P.poly * (2 * urand() - 1));
+      const rho = Ty[i] ? 1 : P.rhoZ;
+      Ma[i] = 4 / 3 * PI * Ra[i] ** 3 * rho; In[i] = 0.4 * Ma[i] * Ra[i] * Ra[i];
+      MR[i] = Ty[i] ? P.murFe : P.murZ;
+      S3[i] = (Ra[i] / 0.5) ** 3; CI[i] = P.chi * Ra[i] ** 3 / 3;
+      if (Ra[i] > maxRad) maxRad = Ra[i]; if (Ma[i] < mmin) mmin = Ma[i];
+    }
+    // loose lattice fill inside the cone
+    {
+      const h = 2 * maxRad * 1.08; let placed = 0, z = maxRad + 0.05;
+      while (placed < N) {
+        const R = profileR(z) - maxRad - 0.05, ox = (urand() - 0.5) * h * 0.3, oy = (urand() - 0.5) * h * 0.3;
+        const nmax = Math.floor(R / h) + 1;
+        for (let ix = -nmax; ix <= nmax && placed < N; ix++) for (let iy = -nmax; iy <= nmax && placed < N; iy++) {
+          const x = ix * h + ox, y = iy * h + oy; if (x * x + y * y > R * R) continue;
+          X[3 * placed] = x + 0.02 * (urand() - 0.5); X[3 * placed + 1] = y + 0.02 * (urand() - 0.5); X[3 * placed + 2] = z;
+          V[3 * placed + 2] = -0.2 * urand(); placed++;
+        }
+        z += h;
+      }
+      if (z + 3 > zTopWall) { zTopWall = z + 3; seg[1][3] = zTopWall; }
+    }
+    // ---------------------------------------------------------------- contact model
+    const kn = P.K * (PI / 6) / 0.5, kt = 2 / 7 * kn;
+    const le = Math.log(P.e), zeta = -le / Math.sqrt(PI * PI + le * le);
+    const gnc = 2 * zeta * Math.sqrt(kn), gtc = 0.5 * gnc;
+    const dt = P.cdt * Math.sqrt(mmin / kn);
+    // ---------------------------------------------------------------- cell grid (contacts)
+    const cs = 2 * maxRad + 0.02;
+    const gx0 = -Rtop - 2, gz0 = P.zremove - 2;
+    const gnx = Math.ceil((2 * Rtop + 4) / cs) + 1, gny = gnx;
+    let gnz = Math.ceil((zTopWall + 8 - gz0) / cs) + 1;
+    let ncell = gnx * gny * gnz;
+    let cellCount = new Int32Array(ncell + 1), cellStart = new Int32Array(ncell + 1);
+    const sorted = new Int32Array(N), cellOf = new Int32Array(N);
+    function cellIndex(x, y, z) {
+      let ix = Math.floor((x - gx0) / cs), iy = Math.floor((y - gx0) / cs), iz = Math.floor((z - gz0) / cs);
+      if (ix < 0) ix = 0; else if (ix >= gnx) ix = gnx - 1;
+      if (iy < 0) iy = 0; else if (iy >= gny) iy = gny - 1;
+      if (iz < 0) iz = 0; else if (iz >= gnz) iz = gnz - 1;
+      return (iz * gny + iy) * gnx + ix;
+    }
+    function gridFill() {
+      cellCount.fill(0);
+      for (let i = 0; i < N; i++) { const c = cellIndex(X[3 * i], X[3 * i + 1], X[3 * i + 2]); cellOf[i] = c; cellCount[c]++; }
+      let s = 0; for (let c = 0; c < ncell; c++) { cellStart[c] = s; s += cellCount[c]; } cellStart[ncell] = s;
+      for (let c = 0; c < ncell; c++) cellCount[c] = cellStart[c];
+      for (let i = 0; i < N; i++) sorted[cellCount[cellOf[i]]++] = i;
+    }
+    // contact history: per grain i, MC slots for partners j > i
+    const MC = 12;
+    const cPart = new Int32Array(N * MC).fill(-1), cSeen = new Uint8Array(N * MC), cXi = new Float64Array(N * MC * 3);
+    // wall history: 3 segments per grain (cone, cylinder, plug)
+    const wXi = new Float64Array(N * 9), wOn = new Uint8Array(N * 3);
+    // ---------------------------------------------------------------- magnetic neighbour list
+    let mpI = new Int32Array(16), mpJ = new Int32Array(16), mpN = 0;
+    const XM = new Float64Array(3 * N);
+    let needMagList = true;
+    function buildMagList() {
+      const rl = P.rc + P.skinM, rl2 = rl * rl;
+      const mcs = rl, mnx = Math.ceil((2 * Rtop + 4) / mcs) + 1, mnz = Math.ceil((zTopWall + 8 - gz0) / mcs) + 1;
+      const nc = mnx * mnx * mnz;
+      const head = new Int32Array(nc).fill(-1), next = new Int32Array(N);
+      const cidx = new Int32Array(NFe);
+      for (let k = 0; k < NFe; k++) {
+        const i = magIdx[k];
+        let ix = Math.floor((X[3 * i] - gx0) / mcs), iy = Math.floor((X[3 * i + 1] - gx0) / mcs), iz = Math.floor((X[3 * i + 2] - gz0) / mcs);
+        ix = Math.min(mnx - 1, Math.max(0, ix)); iy = Math.min(mnx - 1, Math.max(0, iy)); iz = Math.min(mnz - 1, Math.max(0, iz));
+        const c = (iz * mnx + iy) * mnx + ix; cidx[k] = c; next[i] = head[c]; head[c] = i;
+        XM[3 * i] = X[3 * i]; XM[3 * i + 1] = X[3 * i + 1]; XM[3 * i + 2] = X[3 * i + 2];
+      }
+      mpN = 0;
+      for (let k = 0; k < NFe; k++) {
+        const i = magIdx[k], c = cidx[k];
+        const ix = c % mnx, iy = Math.floor(c / mnx) % mnx, iz = Math.floor(c / (mnx * mnx));
+        for (let dz = -1; dz <= 1; dz++) { const cz = iz + dz; if (cz < 0 || cz >= mnz) continue;
+          for (let dy = -1; dy <= 1; dy++) { const cy = iy + dy; if (cy < 0 || cy >= mnx) continue;
+            for (let dx = -1; dx <= 1; dx++) { const cx = ix + dx; if (cx < 0 || cx >= mnx) continue;
+              for (let j = head[(cz * mnx + cy) * mnx + cx]; j >= 0; j = next[j]) {
+                if (j <= i) continue;
+                const rx = X[3 * j] - X[3 * i], ry = X[3 * j + 1] - X[3 * i + 1], rz = X[3 * j + 2] - X[3 * i + 2];
+                if (rx * rx + ry * ry + rz * rz > rl2) continue;
+                if (mpN >= mpI.length) { const a = new Int32Array(mpI.length * 2); a.set(mpI); mpI = a; const b = new Int32Array(mpJ.length * 2); b.set(mpJ); mpJ = b; }
+                mpI[mpN] = i; mpJ[mpN] = j; mpN++;
+              }
+            }
+          }
+        }
+      }
+      needMagList = false;
+    }
+    // ---------------------------------------------------------------- applied field
+    let b0amp = Math.sqrt(P.Bo * PI / 36);
+    const hfix = [0, 0, 1]; let wrho0 = 1;
+    let tOpen = -1, tnow = 0, plugOn = true, step = 0;
+    let fs = 1; const fh = [0, 0, 1];
+    function axesInit() {
+      const th = P.theta * PI / 180, az = P.azim * PI / 180;
+      hfix[0] = Math.sin(th) * Math.cos(az); hfix[1] = Math.sin(th) * Math.sin(az); hfix[2] = Math.cos(th);
+      const u0 = [-P.xw, 0, -P.zw], sp = u0[0] * hfix[0] + u0[1] * hfix[1] + u0[2] * hfix[2];
+      const rr = [u0[0] - sp * hfix[0], u0[1] - sp * hfix[1], u0[2] - sp * hfix[2]];
+      wrho0 = Math.max(1e-6, Math.hypot(rr[0], rr[1], rr[2]));
+      b0amp = Math.sqrt(Math.max(0, P.Bo) * PI / 36);
+    }
+    axesInit();
+    function timeFactor(t) {
+      const w = 2 * PI * P.freq;
+      switch (P.tmode) {
+        case 1: return Math.sin(w * t);
+        case 2: return ((P.freq * t) % 1) < 0.5 ? 1 : 0;
+        case 4: return P.sdc + P.sac * Math.sin(w * t);
+        case 5: { if (tOpen < 0) return 0; const u = (t - tOpen) / Math.max(1e-9, P.rampT); return u < 0 ? 0 : (u > 1 ? 1 : u); }
+        default: return 1;
+      }
+    }
+    function fieldTime(t) {
+      fs = timeFactor(t);
+      fh[0] = hfix[0]; fh[1] = hfix[1]; fh[2] = hfix[2];
+    }
+    const bb = [0, 0, 0];
+    function bext(x, y, z, b) {
+      const A = b0amp * fs;
+      if (P.gmode === 3) {             // anti-Helmholtz quadrupole, axis hfix, zero at q*hfix
+        const Lq = P.Lq > 0 ? P.Lq : Math.abs(P.q) || 1, G = A / Lq;
+        const ux = x - P.q * hfix[0], uy = y - P.q * hfix[1], uz = z - P.q * hfix[2];
+        const sp = ux * hfix[0] + uy * hfix[1] + uz * hfix[2];
+        b[0] = G * (1.5 * sp * hfix[0] - 0.5 * ux); b[1] = G * (1.5 * sp * hfix[1] - 0.5 * uy); b[2] = G * (1.5 * sp * hfix[2] - 0.5 * uz);
+        return;
+      }
+      if (P.gmode === 4) {             // long straight wire along hfix through (xw, 0, zw)
+        const ux = x - P.xw, uy = y, uz = z - P.zw;
+        const sp = ux * hfix[0] + uy * hfix[1] + uz * hfix[2];
+        const rx = ux - sp * hfix[0], ry = uy - sp * hfix[1], rz = uz - sp * hfix[2];
+        let r2 = rx * rx + ry * ry + rz * rz; if (r2 < 1e-6) r2 = 1e-6;
+        const pre = A * wrho0 / r2;
+        b[0] = pre * (hfix[1] * rz - hfix[2] * ry); b[1] = pre * (hfix[2] * rx - hfix[0] * rz); b[2] = pre * (hfix[0] * ry - hfix[1] * rx);
+        return;
+      }
+      if (P.gmode === 2) {             // point-dipole magnet on the axis at z = zm, moment along z
+        const Rx = x, Ry = y, Rz = z - P.zm, R2 = Rx * Rx + Ry * Ry + Rz * Rz, Rn = Math.sqrt(R2);
+        const zz = Math.abs(P.zm), pre = A * 0.5 * zz * zz * zz / (R2 * Rn), cz = Rz / Rn;
+        b[0] = pre * 3 * cz * Rx / Rn; b[1] = pre * 3 * cz * Ry / Rn; b[2] = pre * (3 * cz * cz - 1);
+        return;
+      }
+      b[0] = A * fh[0]; b[1] = A * fh[1]; b[2] = A * fh[2];
+      if (P.gmode === 1 && P.L !== 0) { const G = A / P.L; b[0] -= 0.5 * G * x; b[1] -= 0.5 * G * y; b[2] += G * z; }
+    }
+    const bp = [0, 0, 0], bm = [0, 0, 0];
+    function mgradb(x, y, z, mx, my, mz, o) {   // (m . grad) b_ext
+      o[0] = o[1] = o[2] = 0;
+      if (P.gmode === 1 && P.L !== 0) { const G = b0amp * fs / P.L; o[0] = -0.5 * G * mx; o[1] = -0.5 * G * my; o[2] = G * mz; return; }
+      if (P.gmode === 3) {
+        const Lq = P.Lq > 0 ? P.Lq : Math.abs(P.q) || 1, G = b0amp * fs / Lq;
+        const mh = mx * hfix[0] + my * hfix[1] + mz * hfix[2];
+        o[0] = G * (1.5 * mh * hfix[0] - 0.5 * mx); o[1] = G * (1.5 * mh * hfix[1] - 0.5 * my); o[2] = G * (1.5 * mh * hfix[2] - 0.5 * mz);
+        return;
+      }
+      if (P.gmode === 2 || P.gmode === 4) {
+        const mm = Math.sqrt(mx * mx + my * my + mz * mz); if (mm === 0) return;
+        const eps = 1e-3, ex = eps * mx / mm, ey = eps * my / mm, ez = eps * mz / mm;
+        bext(x + ex, y + ey, z + ez, bp); bext(x - ex, y - ey, z - ez, bm);
+        o[0] = mm * (bp[0] - bm[0]) / (2 * eps); o[1] = mm * (bp[1] - bm[1]) / (2 * eps); o[2] = mm * (bp[2] - bm[2]) / (2 * eps);
+      }
+    }
+    const P0par = P.mutual ? 1 / ((1 - P.chi / 12) ** 2) : 1;
+    // ---------------------------------------------------------------- magnetic update
+    let capped = 0;
+    const og = [0, 0, 0];
+    function magneticUpdate() {
+      if (needMagList) buildMagList();
+      const rc2 = P.rc * P.rc, sik = P.sikka, mut = P.mutual, ellf = P.ell, EcP = P.Ec / P0par - 1, chi3 = P.chi / 3;
+      for (let k = 0; k < NFe; k++) { const i = magIdx[k]; HN[3 * i] = HN[3 * i + 1] = HN[3 * i + 2] = 0; FM[3 * i] = FM[3 * i + 1] = FM[3 * i + 2] = 0; }
+      // one pass over pairs: interaction field (for the next moments) and pair forces (current moments)
+      for (let p = 0; p < mpN; p++) {
+        const i = mpI[p], j = mpJ[p];
+        const rx = X[3 * j] - X[3 * i], ry = X[3 * j + 1] - X[3 * i + 1], rz = X[3 * j + 2] - X[3 * i + 2];
+        const r2 = rx * rx + ry * ry + rz * rz; if (r2 > rc2) continue;
+        const r = Math.sqrt(r2), sumR = Ra[i] + Ra[j], rm = r < sumR ? sumR : r;
+        const nx = rx / r, ny = ry / r, nz = rz / r;
+        const mix = MU[3 * i], miy = MU[3 * i + 1], miz = MU[3 * i + 2], mjx = MU[3 * j], mjy = MU[3 * j + 1], mjz = MU[3 * j + 2];
+        const min = mix * nx + miy * ny + miz * nz, mjn = mjx * nx + mjy * ny + mjz * nz;
+        const rm2 = rm * rm, ir3 = 1 / (rm2 * rm);
+        if (mut) {   // dipole field of j at i and of i at j (distance clamped to contact)
+          HN[3 * i] += (3 * mjn * nx - mjx) * ir3; HN[3 * i + 1] += (3 * mjn * ny - mjy) * ir3; HN[3 * i + 2] += (3 * mjn * nz - mjz) * ir3;
+          HN[3 * j] += (3 * min * nx - mix) * ir3; HN[3 * j + 1] += (3 * min * ny - miy) * ir3; HN[3 * j + 2] += (3 * min * nz - miz) * ir3;
+        }
+        const mij = mix * mjx + miy * mjy + miz * mjz, pre = 3 / (rm2 * rm2);
+        let fx = pre * (min * mjx + mjn * mix + (mij - 5 * min * mjn) * nx);
+        let fy = pre * (min * mjy + mjn * miy + (mij - 5 * min * mjn) * ny);
+        let fz = pre * (min * mjz + mjn * miz + (mij - 5 * min * mjn) * nz);
+        if (sik) {
+          const am = 0.5 * sumR, hx = mix + mjx, hy = miy + mjy, hz = miz + mjz, h2 = hx * hx + hy * hy + hz * hz;
+          let c2 = 0; if (h2 > 0) { const hn = hx * nx + hy * ny + hz * nz; c2 = hn * hn / h2; }
+          let fade = 1 - (r > sumR ? r - sumR : 0) / (ellf * am); if (fade < 0) fade = 0;
+          const Epar = 1 + EcP * fade;
+          const c = rm / am; let Eper = 1;
+          if (c < 4.2) { Eper = 1 + EB1 / c + EB2 / (c * c) + EB3 / (c * c * c); if (mut) { const be = chi3 / (c * c * c); Eper *= (1 + be) * (1 + be); } }
+          const E = Epar * c2 + Eper * (1 - c2);
+          fx *= E; fy *= E; fz *= E;
+        }
+        FM[3 * i] -= fx; FM[3 * i + 1] -= fy; FM[3 * i + 2] -= fz;
+        FM[3 * j] += fx; FM[3 * j + 1] += fy; FM[3 * j + 2] += fz;
+      }
+      if (mut) {
+        const w = P.relax;
+        for (let k = 0; k < NFe; k++) { const i = magIdx[k];
+          HI[3 * i] += w * (HN[3 * i] - HI[3 * i]); HI[3 * i + 1] += w * (HN[3 * i + 1] - HI[3 * i + 1]); HI[3 * i + 2] += w * (HN[3 * i + 2] - HI[3 * i + 2]); }
+      }
+      // Kelvin force of a non-uniform applied field (current moments)
+      if (P.kelvin && P.gmode !== 0) {
+        const pre = 3 / (P.chi * 0.125);
+        for (let k = 0; k < NFe; k++) {
+          const i = magIdx[k];
+          mgradb(X[3 * i], X[3 * i + 1], X[3 * i + 2], MU[3 * i], MU[3 * i + 1], MU[3 * i + 2], og);
+          FM[3 * i] += pre * og[0]; FM[3 * i + 1] += pre * og[1]; FM[3 * i + 2] += pre * og[2];
+        }
+      }
+      // new moments with the local-field cap
+      capped = 0;
+      for (let k = 0; k < NFe; k++) {
+        const i = magIdx[k];
+        bext(X[3 * i], X[3 * i + 1], X[3 * i + 2], bb);
+        const s3 = S3[i], ci = mut ? CI[i] : 0;
+        let mx = s3 * bb[0] + ci * HI[3 * i], my = s3 * bb[1] + ci * HI[3 * i + 1], mz = s3 * bb[2] + ci * HI[3 * i + 2];
+        const mm = Math.sqrt(mx * mx + my * my + mz * mz), mmax = P.cap * s3 * Math.sqrt(bb[0] * bb[0] + bb[1] * bb[1] + bb[2] * bb[2]);
+        if (mm > mmax && mm > 0) { const f = mmax / mm; mx *= f; my *= f; mz *= f; capped++; }
+        MU[3 * i] = mx; MU[3 * i + 1] = my; MU[3 * i + 2] = mz;
+      }
+    }
+    // ---------------------------------------------------------------- contacts
+    function contactPair(i, j, rx, ry, rz, r2) {
+      const ai = Ra[i], aj = Ra[j], sumR = ai + aj;
+      const r = Math.sqrt(r2), nx = rx / r, ny = ry / r, nz = rz / r, delta = sumR - r;
+      let vrx = V[3 * j] - V[3 * i], vry = V[3 * j + 1] - V[3 * i + 1], vrz = V[3 * j + 2] - V[3 * i + 2];
+      if (P.rot) {
+        const wx = ai * W[3 * i] + aj * W[3 * j], wy = ai * W[3 * i + 1] + aj * W[3 * j + 1], wz = ai * W[3 * i + 2] + aj * W[3 * j + 2];
+        vrx -= wy * nz - wz * ny; vry -= wz * nx - wx * nz; vrz -= wx * ny - wy * nx;
+      }
+      const vn = vrx * nx + vry * ny + vrz * nz;
+      const sq = Math.sqrt(Ma[i] * Ma[j] / (Ma[i] + Ma[j]));
+      let fn = kn * delta - gnc * sq * vn; if (fn < 0) fn = 0;
+      const vtx = vrx - vn * nx, vty = vry - vn * ny, vtz = vrz - vn * nz;
+      // history slot
+      const base = i * MC; let s = -1, free = -1;
+      for (let q = 0; q < MC; q++) { const pj = cPart[base + q]; if (pj === j) { s = q; break; } if (pj < 0 && free < 0) free = q; }
+      let o;
+      if (s < 0) {
+        if (free < 0) free = 0;          // overflow: reuse the first slot
+        s = free; cPart[base + s] = j; o = 3 * (base + s); cXi[o] = cXi[o + 1] = cXi[o + 2] = 0;
+      } else o = 3 * (base + s);
+      cSeen[base + s] = 1;
+      let x0 = cXi[o], x1 = cXi[o + 1], x2 = cXi[o + 2];
+      const xn = x0 * nx + x1 * ny + x2 * nz, xm0 = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
+      x0 -= xn * nx; x1 -= xn * ny; x2 -= xn * nz;
+      const xm1 = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
+      if (xm1 > 0) { const sc = xm0 / xm1; x0 *= sc; x1 *= sc; x2 *= sc; }
+      x0 += vtx * dt; x1 += vty * dt; x2 += vtz * dt;
+      const gt = gtc * sq;
+      let ftx = -kt * x0 - gt * vtx, fty = -kt * x1 - gt * vty, ftz = -kt * x2 - gt * vtz;
+      const ftm = Math.sqrt(ftx * ftx + fty * fty + ftz * ftz), fmax = P.mu * fn;
+      if (ftm > fmax) {
+        const sc = ftm > 0 ? fmax / ftm : 0; ftx *= sc; fty *= sc; ftz *= sc;
+        x0 = -(ftx + gt * vtx) / kt; x1 = -(fty + gt * vty) / kt; x2 = -(ftz + gt * vtz) / kt;
+      }
+      cXi[o] = x0; cXi[o + 1] = x1; cXi[o + 2] = x2;
+      const fx = fn * nx + ftx, fy = fn * ny + fty, fz = fn * nz + ftz;
+      F[3 * i] -= fx; F[3 * i + 1] -= fy; F[3 * i + 2] -= fz;
+      F[3 * j] += fx; F[3 * j + 1] += fy; F[3 * j + 2] += fz;
+      if (P.rot) {
+        const tx = ny * ftz - nz * fty, ty = nz * ftx - nx * ftz, tz = nx * fty - ny * ftx;
+        T[3 * i] -= ai * tx; T[3 * i + 1] -= ai * ty; T[3 * i + 2] -= ai * tz;
+        T[3 * j] -= aj * tx; T[3 * j + 1] -= aj * ty; T[3 * j + 2] -= aj * tz;
+        const murc = 0.5 * (MR[i] + MR[j]);
+        if (murc > 0) {
+          const wrx = W[3 * i] - W[3 * j], wry = W[3 * i + 1] - W[3 * j + 1], wrz = W[3 * i + 2] - W[3 * j + 2];
+          const wm = Math.sqrt(wrx * wrx + wry * wry + wrz * wrz);
+          if (wm > 1e-12) {
+            let mr = murc * (ai * aj / sumR) * fn;
+            const mlim = 0.5 * (In[i] * In[j] / (In[i] + In[j])) * wm / dt; if (mr > mlim) mr = mlim;
+            const ux = mr * wrx / wm, uy = mr * wry / wm, uz = mr * wrz / wm;
+            T[3 * i] -= ux; T[3 * i + 1] -= uy; T[3 * i + 2] -= uz; T[3 * j] += ux; T[3 * j + 1] += uy; T[3 * j + 2] += uz;
+          }
+        }
+      }
+    }
+    function contacts() {
+      gridFill();
+      cSeen.fill(0);
+      for (let i = 0; i < N; i++) {
+        const xi = X[3 * i], yi = X[3 * i + 1], zi = X[3 * i + 2], ai = Ra[i];
+        const c = cellOf[i], ix = c % gnx, iy = Math.floor(c / gnx) % gny, iz = Math.floor(c / (gnx * gny));
+        for (let dz = -1; dz <= 1; dz++) { const cz = iz + dz; if (cz < 0 || cz >= gnz) continue;
+          for (let dy = -1; dy <= 1; dy++) { const cy = iy + dy; if (cy < 0 || cy >= gny) continue;
+            const rowBase = (cz * gny + cy) * gnx;
+            for (let dx = -1; dx <= 1; dx++) { const cx = ix + dx; if (cx < 0 || cx >= gnx) continue;
+              const cc = rowBase + cx, e = cellStart[cc + 1];
+              for (let q = cellStart[cc]; q < e; q++) {
+                const j = sorted[q]; if (j <= i) continue;
+                const rx = X[3 * j] - xi, ry = X[3 * j + 1] - yi, rz = X[3 * j + 2] - zi;
+                const sR = ai + Ra[j], r2 = rx * rx + ry * ry + rz * rz;
+                if (r2 < sR * sR) contactPair(i, j, rx, ry, rz, r2);
+              }
+            }
+          }
+        }
+      }
+      // forget springs of contacts that ended
+      for (let k = 0; k < N * MC; k++) if (cPart[k] >= 0 && !cSeen[k]) cPart[k] = -1;
+    }
+    function wallOne(i, sg, slot) {
+      const x = X[3 * i], y = X[3 * i + 1], z = X[3 * i + 2], a = Ra[i];
+      const rho = Math.sqrt(x * x + y * y), ex = rho > 1e-9 ? x / rho : 1, ey = rho > 1e-9 ? y / rho : 0;
+      const r0 = sg[0], z0 = sg[1], dr = sg[2] - sg[0], dzz = sg[3] - sg[1], L2 = dr * dr + dzz * dzz;
+      let t = ((rho - r0) * dr + (z - z0) * dzz) / L2; if (t < 0) t = 0; if (t > 1) t = 1;
+      const qr = rho - (r0 + t * dr), qz = z - (z0 + t * dzz), dist = Math.sqrt(qr * qr + qz * qz);
+      const wi = 3 * i + slot;
+      if (dist >= a || dist < 1e-12) { wOn[wi] = 0; return; }
+      const nx = qr / dist * ex, ny = qr / dist * ey, nz = qz / dist, delta = a - dist;
+      let vrx = V[3 * i], vry = V[3 * i + 1], vrz = V[3 * i + 2];
+      if (P.rot) { const wx = W[3 * i], wy = W[3 * i + 1], wz = W[3 * i + 2];
+        vrx -= a * (wy * nz - wz * ny); vry -= a * (wz * nx - wx * nz); vrz -= a * (wx * ny - wy * nx); }
+      const vn = vrx * nx + vry * ny + vrz * nz, sq = Math.sqrt(Ma[i]);
+      let fn = kn * delta - gnc * sq * vn; if (fn < 0) fn = 0;
+      const vtx = vrx - vn * nx, vty = vry - vn * ny, vtz = vrz - vn * nz;
+      const o = 3 * wi;
+      if (!wOn[wi]) { wXi[o] = wXi[o + 1] = wXi[o + 2] = 0; }
+      let x0 = wXi[o], x1 = wXi[o + 1], x2 = wXi[o + 2];
+      const xn = x0 * nx + x1 * ny + x2 * nz; x0 -= xn * nx; x1 -= xn * ny; x2 -= xn * nz;
+      x0 += vtx * dt; x1 += vty * dt; x2 += vtz * dt;
+      const gt = gtc * sq;
+      let ftx = -kt * x0 - gt * vtx, fty = -kt * x1 - gt * vty, ftz = -kt * x2 - gt * vtz;
+      const ftm = Math.sqrt(ftx * ftx + fty * fty + ftz * ftz), fmax = P.muw * fn;
+      if (ftm > fmax) { const sc = ftm > 0 ? fmax / ftm : 0; ftx *= sc; fty *= sc; ftz *= sc;
+        x0 = -(ftx + gt * vtx) / kt; x1 = -(fty + gt * vty) / kt; x2 = -(ftz + gt * vtz) / kt; }
+      wXi[o] = x0; wXi[o + 1] = x1; wXi[o + 2] = x2; wOn[wi] = 1;
+      F[3 * i] += fn * nx + ftx; F[3 * i + 1] += fn * ny + fty; F[3 * i + 2] += fn * nz + ftz;
+      if (P.rot) {
+        T[3 * i] -= a * (ny * ftz - nz * fty); T[3 * i + 1] -= a * (nz * ftx - nx * ftz); T[3 * i + 2] -= a * (nx * fty - ny * ftx);
+        if (MR[i] > 0) { const wm = Math.hypot(W[3 * i], W[3 * i + 1], W[3 * i + 2]);
+          if (wm > 1e-12) { let mr = MR[i] * a * fn; const mlim = 0.5 * In[i] * wm / dt; if (mr > mlim) mr = mlim;
+            T[3 * i] -= mr * W[3 * i] / wm; T[3 * i + 1] -= mr * W[3 * i + 1] / wm; T[3 * i + 2] -= mr * W[3 * i + 2] / wm; } }
+      }
+    }
+    function walls() {
+      for (let i = 0; i < N; i++) {
+        const z = X[3 * i + 2];
+        if (z < -1.5) { wOn[3 * i] = wOn[3 * i + 1] = wOn[3 * i + 2] = 0; continue; }
+        if (z > Ra[i] + 0.05) {
+          const rho = Math.sqrt(X[3 * i] * X[3 * i] + X[3 * i + 1] * X[3 * i + 1]);
+          if ((profileR(z) - rho) * cosA > Ra[i] + 0.05) { wOn[3 * i] = wOn[3 * i + 1] = 0; if (!plugOn) wOn[3 * i + 2] = 0; continue; }
+        }
+        wallOne(i, seg[0], 0); wallOne(i, seg[1], 1);
+        if (plugOn) wallOne(i, plugSeg, 2); else wOn[3 * i + 2] = 0;
+      }
+    }
+    // ---------------------------------------------------------------- re-insertion (constant head)
+    let zSurf = 0;
+    const recent = []; // grains inserted this step (not yet in the grid)
+    function overlapsAt(x, y, z, a, self) {
+      for (const j of recent) { if (j === self) continue;
+        const rx = X[3 * j] - x, ry = X[3 * j + 1] - y, rz = X[3 * j + 2] - z, c = a + Ra[j] + 0.05;
+        if (rx * rx + ry * ry + rz * rz < c * c) return true; }
+      const ix = Math.floor((x - gx0) / cs), iy = Math.floor((y - gx0) / cs), iz = Math.floor((z - gz0) / cs);
+      for (let dz = -1; dz <= 1; dz++) { const cz = iz + dz; if (cz < 0 || cz >= gnz) continue;
+        for (let dy = -1; dy <= 1; dy++) { const cy = iy + dy; if (cy < 0 || cy >= gny) continue;
+          for (let dx = -1; dx <= 1; dx++) { const cx = ix + dx; if (cx < 0 || cx >= gnx) continue;
+            const cc = (cz * gny + cy) * gnx + cx;
+            for (let q = cellStart[cc]; q < cellStart[cc + 1]; q++) { const j = sorted[q]; if (j === self || recent.includes(j)) continue;
+              const rx = X[3 * j] - x, ry = X[3 * j + 1] - y, rz = X[3 * j + 2] - z, c = a + Ra[j] + 0.05;
+              if (rx * rx + ry * ry + rz * rz < c * c) return true; } } } }
+      return false;
+    }
+    function reinsert(i) {
+      const a = Ra[i], zb = zSurf + 1;
+      for (let at = 0; at < 200; at++) {
+        const z = zb + 2 * urand() + 0.5 * Math.floor(at / 40);
+        let Rm = profileR(z) - a - 0.3; if (Rm < 0.5) Rm = 0.5;
+        const rr = Rm * Math.sqrt(urand()), ph = 2 * PI * urand(), x = rr * Math.cos(ph), y = rr * Math.sin(ph);
+        if (!overlapsAt(x, y, z, a, i)) {
+          X[3 * i] = x; X[3 * i + 1] = y; X[3 * i + 2] = z; V[3 * i] = V[3 * i + 1] = 0; V[3 * i + 2] = -0.5;
+          W[3 * i] = W[3 * i + 1] = W[3 * i + 2] = 0; wOn[3 * i] = wOn[3 * i + 1] = wOn[3 * i + 2] = 0;
+          if (Ty[i]) { HI[3 * i] = HI[3 * i + 1] = HI[3 * i + 2] = 0; FM[3 * i] = FM[3 * i + 1] = FM[3 * i + 2] = 0; }
+          recent.push(i); needMagList = true; return;
+        }
+      }
+      X[3 * i] = 0; X[3 * i + 1] = 0; X[3 * i + 2] = zSurf + 6; V[3 * i] = V[3 * i + 1] = V[3 * i + 2] = 0; needMagList = true;
+    }
+    // ---------------------------------------------------------------- bookkeeping
+    let passTot = 0, passFe = 0;
+    const rec = [];        // [t, passTot, passFe, s(t), nNeckFe, nNeckZ]
+    let nextRec = 0;
+    // ---------------------------------------------------------------- integrator
+    function forces() {
+      F.fill(0); if (P.rot) T.fill(0);
+      for (let i = 0; i < N; i++) F[3 * i + 2] -= Ma[i];
+      contacts();
+      walls();
+      if (NFe > 0 && P.Bo > 0) {
+        fieldTime(tnow);
+        if (step % P.nmag === 0) magneticUpdate();
+        for (let k = 0; k < NFe; k++) { const i = magIdx[k]; F[3 * i] += FM[3 * i]; F[3 * i + 1] += FM[3 * i + 1]; F[3 * i + 2] += FM[3 * i + 2]; }
+      }
+    }
+    function freeSurface() {
+      let zmax = -1e9; for (let i = 0; i < N; i++) if (X[3 * i + 2] > zmax) zmax = X[3 * i + 2];
+      let s = 0, c = 0; for (let i = 0; i < N; i++) if (X[3 * i + 2] > zmax - 1.5) { s += X[3 * i + 2]; c++; }
+      return c ? s / c : zmax;
+    }
+    let started = false;
+    function advance(nsteps) {
+      if (!started) { fieldTime(0); forces(); started = true; }
+      const rl = 0.25 * P.skinM * P.skinM;
+      for (let n = 0; n < nsteps; n++) {
+        for (let i = 0; i < N; i++) {
+          const im = 0.5 * dt / Ma[i];
+          V[3 * i] += im * F[3 * i]; V[3 * i + 1] += im * F[3 * i + 1]; V[3 * i + 2] += im * F[3 * i + 2];
+          if (P.rot) { const ii = 0.5 * dt / In[i]; W[3 * i] += ii * T[3 * i]; W[3 * i + 1] += ii * T[3 * i + 1]; W[3 * i + 2] += ii * T[3 * i + 2]; }
+        }
+        recent.length = 0;
+        let mm2 = 0;
+        for (let i = 0; i < N; i++) {
+          const zo = X[3 * i + 2];
+          X[3 * i] += dt * V[3 * i]; X[3 * i + 1] += dt * V[3 * i + 1]; X[3 * i + 2] += dt * V[3 * i + 2];
+          const zn = X[3 * i + 2];
+          if (!plugOn && zo > P.zcount && zn <= P.zcount) { passTot++; if (Ty[i]) passFe++; }
+          if (zn < P.zremove || zn > zTopWall + 5) { reinsert(i); continue; }
+          if (Ty[i]) { const dx = X[3 * i] - XM[3 * i], dy = X[3 * i + 1] - XM[3 * i + 1], dz = X[3 * i + 2] - XM[3 * i + 2];
+            const d2 = dx * dx + dy * dy + dz * dz; if (d2 > mm2) mm2 = d2; }
+        }
+        if (mm2 > rl) needMagList = true;
+        tnow += dt; step++;
+        forces();
+        for (let i = 0; i < N; i++) {
+          const im = 0.5 * dt / Ma[i];
+          V[3 * i] += im * F[3 * i]; V[3 * i + 1] += im * F[3 * i + 1]; V[3 * i + 2] += im * F[3 * i + 2];
+          if (P.rot) { const ii = 0.5 * dt / In[i]; W[3 * i] += ii * T[3 * i]; W[3 * i + 1] += ii * T[3 * i + 1]; W[3 * i + 2] += ii * T[3 * i + 2]; }
+        }
+        if (plugOn && tnow >= P.Tsettle) { plugOn = false; tOpen = tnow; zSurf = freeSurface(); }
+        if (tnow >= nextRec) {
+          nextRec += P.recdt;
+          let nf = 0, nz = 0;
+          for (let i = 0; i < N; i++) { const z = X[3 * i + 2]; if (z > 0 && z < Rout) { const r2 = X[3 * i] ** 2 + X[3 * i + 1] ** 2; if (r2 < Rout * Rout) { if (Ty[i]) nf++; else nz++; } } }
+          rec.push([tnow, passTot, passFe, fs, nf, nz]);
+          if (rec.length > 40000) rec.splice(0, 20000);
+        }
+      }
+    }
+    // ---------------------------------------------------------------- public API
+    function setField(f) {
+      const keys = ['Bo', 'theta', 'azim', 'gmode', 'L', 'zm', 'q', 'Lq', 'xw', 'zw', 'tmode', 'freq', 'sdc', 'sac', 'rampT', 'kelvin', 'mutual'];
+      for (const k of keys) if (f[k] !== undefined) P[k] = f[k];
+      axesInit(); needMagList = true;
+      if (P.Bo <= 0) { MU.fill(0); HI.fill(0); FM.fill(0); }
+    }
+    function snapshot(out) {   // positions (float32) + magnetisation magnitude for colouring
+      const pos = out && out.pos && out.pos.length === 3 * N ? out.pos : new Float32Array(3 * N);
+      const mag = out && out.mag && out.mag.length === N ? out.mag : new Float32Array(N);
+      for (let i = 0; i < 3 * N; i++) pos[i] = X[i];
+      const ref = b0amp > 0 ? b0amp : 1;
+      for (let i = 0; i < N; i++) mag[i] = Ty[i] ? Math.hypot(MU[3 * i], MU[3 * i + 1], MU[3 * i + 2]) / (S3[i] * ref) : 0;
+      return { pos, mag };
+    }
+    function fieldAt(x, y, z) { fieldTime(tnow); const b = [0, 0, 0]; bext(x, y, z, b); return b.map(v => v / (b0amp || 1)); }
+    return {
+      N, NFe, dt, P, Rout, Rtop, Hc, zTopWall: () => zTopWall, radii: Ra, types: Ty,
+      advance, setField, snapshot, fieldAt,
+      time: () => tnow, opened: () => !plugOn, tOpen: () => tOpen, counts: () => [passTot, passFe],
+      records: () => rec, capped: () => capped, steps: () => step,
+      _dbg: { X, V, Ra, Ma, MU, FM, HI, Ty, S3,
+        magUpdate: () => { fieldTime(tnow); needMagList = true; magneticUpdate(); }, magUpdateNoList: () => { fieldTime(tnow); magneticUpdate(); } }
+    };
+  }
+  const api = { createSim, DEFAULTS };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.HGEngine = api;
+})(typeof self !== 'undefined' ? self : this);
+</script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  // ------------------------------------------------------------------ physics constants and conversions
+  const G0 = 9.81;
+  const tauOf = (dmm) => Math.sqrt(dmm * 1e-3 / G0);                 // s
+  const B1of = (dmm) => 4.40 * Math.sqrt(dmm / 0.45);                 // mT giving Bo = 1 for spheres
+  const BoOf = (BmT, dmm, sF) => sF * (BmT / B1of(dmm)) ** 2;
+  const RHO_F = 7.87, RHO_Z = 6.0, CHI = 3;
+  // Model constants fitted to the full simulations of this hourglass (D/d = 9, 14 deg cone):
+  // (Q/Q0)^2 = 1 + Gamma_m - (phi^beta (rhoF/rhobar) Bo / BoStar1)^nu,  BoStar1 proportional to D/d.
+  const MODEL = /*MODEL*/{"betaV": 0.96, "betaH": 1.12, "nuV": 1.19, "nuH": 0.95, "BoStar1V": 0.79, "BoStar1H": 1.855, "Dd0": 9, "Tw": 3.1, "zpD": 0.9};
+  // zero-field rate of this browser engine at D/d = 9, 14 deg, fill 2D (grains per tau), by iron fraction
+  const Q0TAB = /*Q0TAB*/[[0, 174], [0.25, 165], [0.5, 155], [0.75, 148], [1, 149]];
+
+  // ------------------------------------------------------------------ state
+  const S = {
+    phi: 0.5, d: 0.45, sF: 1, mur: 0.15, Dmm: 4, alpha: 14, Hrel: 2,
+    src: 0, B0: 4, theta: 0, G: 0.3, zn: 10, qaxis: 0, I: 60, rw: 6, wdir: 0, Bm: 6, hm: 9,
+    tmode: 0, f: 5, sdc: 0.7, sac: 0.5, rampMs: 400,
+    mutual: true, sikka: true, kelvin: true, rot: true, mu: 0.4, e: 0.3, rc: 2.5,
+    running: true, cut: true, magColor: false, arrows: true
+  };
+  const Dd = () => S.Dmm / S.d;
+  const tau = () => tauOf(S.d);
+  const rhoBar = () => S.phi * RHO_F + (1 - S.phi) * RHO_Z;
+
+  // field description for the engine, plus the neck field amplitude (mT) and its direction
+  function fieldSpec() {
+    const d = S.d, f = { kelvin: S.kelvin ? 1 : 0, mutual: S.mutual ? 1 : 0, tmode: S.tmode, freq: S.f * tau(),
+      sdc: S.sdc, sac: S.sac, rampT: S.rampMs / 1000 / tau(), gmode: 0, theta: 0, azim: 0, Bo: 0 };
+    let Bn = 0, vertical = 1;
+    if (S.src === 0) { Bn = S.B0; f.gmode = 0; f.theta = S.theta; f.Bo = BoOf(S.B0, d, S.sF); vertical = Math.cos(S.theta * Math.PI / 180) ** 2; }
+    else if (S.src === 3) {
+      const Lq = 20; f.gmode = 3; f.theta = S.qaxis ? 90 : 0; f.q = -S.zn / d; f.Lq = Lq;
+      f.Bo = BoOf(S.G * Lq * d, d, S.sF); Bn = S.G * Math.abs(S.zn); vertical = S.qaxis ? 0 : 1;
+    } else if (S.src === 4) {
+      f.gmode = 4; f.xw = S.rw / d; f.zw = 0; if (S.wdir) { f.theta = 90; f.azim = 90; } else { f.theta = 0; }
+      Bn = 0.2 * S.I / S.rw; f.Bo = BoOf(Bn, d, S.sF); vertical = S.wdir ? 1 : 0;
+    } else if (S.src === 2) { f.gmode = 2; f.zm = -S.hm / d; Bn = S.Bm; f.Bo = BoOf(S.Bm, d, S.sF); vertical = 1; }
+    return { f, Bn, vertical };
+  }
+  // dimensionless applied field u = b/b0 (same formulas as the engine), used for arrows and the Kelvin pull
+  function fieldU(f, x, y, z, out) {
+    const th = (f.theta || 0) * Math.PI / 180, az = (f.azim || 0) * Math.PI / 180;
+    const h = [Math.sin(th) * Math.cos(az), Math.sin(th) * Math.sin(az), Math.cos(th)];
+    if (f.gmode === 3) {
+      const G = 1 / f.Lq, ux = x - f.q * h[0], uy = y - f.q * h[1], uz = z - f.q * h[2], sp = ux * h[0] + uy * h[1] + uz * h[2];
+      out[0] = G * (1.5 * sp * h[0] - 0.5 * ux); out[1] = G * (1.5 * sp * h[1] - 0.5 * uy); out[2] = G * (1.5 * sp * h[2] - 0.5 * uz); return out;
+    }
+    if (f.gmode === 4) {
+      const u0 = [-f.xw, 0, -f.zw], s0 = u0[0] * h[0] + u0[1] * h[1] + u0[2] * h[2];
+      const rho0 = Math.hypot(u0[0] - s0 * h[0], u0[1] - s0 * h[1], u0[2] - s0 * h[2]) || 1;
+      const ux = x - f.xw, uy = y, uz = z - f.zw, sp = ux * h[0] + uy * h[1] + uz * h[2];
+      const rx = ux - sp * h[0], ry = uy - sp * h[1], rz = uz - sp * h[2], r2 = Math.max(1e-6, rx * rx + ry * ry + rz * rz), pre = rho0 / r2;
+      out[0] = pre * (h[1] * rz - h[2] * ry); out[1] = pre * (h[2] * rx - h[0] * rz); out[2] = pre * (h[0] * ry - h[1] * rx); return out;
+    }
+    if (f.gmode === 2) {
+      const Rz = z - f.zm, R2 = x * x + y * y + Rz * Rz, Rn = Math.sqrt(R2), zz = Math.abs(f.zm), pre = 0.5 * zz ** 3 / (R2 * Rn), cz = Rz / Rn;
+      out[0] = pre * 3 * cz * x / Rn; out[1] = pre * 3 * cz * y / Rn; out[2] = pre * (3 * cz * cz - 1); return out;
+    }
+    out[0] = h[0]; out[1] = h[1]; out[2] = h[2]; return out;
+  }
+  // vertical Kelvin pull on an isolated filing at the outlet centre, relative to its weight (positive = downward)
+  function kelvinGamma(f, z) {
+    if (f.gmode === 0 || !S.kelvin) return 0;
+    const za = (z === undefined) ? 0.22 * Dd() : z;   // arch region, about D/4 above the outlet
+    const u = [0, 0, 0], up = [0, 0, 0], um = [0, 0, 0], e = 1e-3;
+    fieldU(f, 0, 0, za, u);
+    const un = Math.hypot(u[0], u[1], u[2]); if (un === 0) return 0;
+    fieldU(f, e * u[0] / un, e * u[1] / un, za + e * u[2] / un, up); fieldU(f, -e * u[0] / un, -e * u[1] / un, za - e * u[2] / un, um);
+    const gz = un * (up[2] - um[2]) / (2 * e);       // ((u.grad)u)_z in 1/d
+    return -(4 * f.Bo / CHI) * gz;
+  }
+  // ratio of the Bond number at the probe height z_p (about one neck diameter up) to the outlet value
+  function probeRatio(f) {
+    const u0 = [0, 0, 0], up = [0, 0, 0];
+    fieldU(f, 0, 0, 0, u0); fieldU(f, 0, 0, MODEL.zpD * Dd(), up);
+    const a = u0[0] ** 2 + u0[1] ** 2 + u0[2] ** 2, b = up[0] ** 2 + up[1] ** 2 + up[2] ** 2;
+    return a > 0 ? b / a : 0;
+  }
+  // Bond number at the probe height for the current source (independent of the outlet value when that is 0)
+  function probeBo(spec) {
+    const f = spec.f, up = [0, 0, 0];
+    fieldU(f, 0, 0, MODEL.zpD * Dd(), up);
+    return f.Bo * (up[0] ** 2 + up[1] ** 2 + up[2] ** 2);
+  }
+  // time factor s(t) of the applied field (t in tau, t0 = opening time)
+  function sOf(t, tOpen) {
+    const w = 2 * Math.PI * S.f * tau();
+    switch (S.tmode) {
+      case 1: return Math.sin(w * t);
+      case 2: return ((S.f * tau() * t) % 1) < 0.5 ? 1 : 0;
+      case 4: return S.sdc + S.sac * Math.sin(w * t);
+      case 5: { if (tOpen < 0) return 0; const u = (t - tOpen) / (S.rampMs / 1000 / tau()); return u < 0 ? 0 : (u > 1 ? 1 : u); }
+      default: return 1;
+    }
+  }
+  // energy-budget model: Q/Q0 for a steady neck Bond number Bo (vertical weight v in [0,1])
+  function modelX(Bo, v) {
+    const rb = rhoBar(), scale = Dd() / MODEL.Dd0;
+    const xV = Math.pow(Math.pow(S.phi, MODEL.betaV) * (RHO_F / rb) * Bo / (MODEL.BoStar1V * scale), MODEL.nuV);
+    const xH = Math.pow(Math.pow(S.phi, MODEL.betaH) * (RHO_F / rb) * Bo / (MODEL.BoStar1H * scale), MODEL.nuH);
+    return v * xV + (1 - v) * xH;
+  }
+  function modelQ(spec) {
+    const f = spec.f, Bo = probeBo(spec), gam = kelvinGamma(f) * S.phi * RHO_F / rhoBar();
+    if (S.phi === 0 || f.Bo === 0) return { q: 1, x: 0, gam: 0 };
+    if (S.tmode === 0 || S.tmode === 5) {
+      const x = modelX(Bo, spec.vertical);
+      return { q: Math.sqrt(Math.max(0, 1 + gam - x)), x, gam };
+    }
+    // time-dependent: x(t) averaged over the response window Tw, then Q(t) averaged over a period
+    const T = 1 / (S.f * tau()), n = 200, Tw = MODEL.Tw;
+    let qs = 0, xs = 0;
+    for (let k = 0; k < n; k++) {
+      const t = 2 * T + k * T / n; let acc = 0; const m = 20;
+      for (let j = 0; j < m; j++) { const s = sOf(t - Tw * (j + 0.5) / m, -1); acc += s * s; }
+      const x = modelX(Bo * acc / m, spec.vertical), g = gam * acc / m;
+      qs += Math.sqrt(Math.max(0, 1 + g - x)); xs += x;
+    }
+    return { q: qs / n, x: xs / n, gam, avg: true };
+  }
+  function regime(x) {
+    if (x < 0.25) return ['weak cohesion', 'free'];
+    if (x < 0.75) return ['cohesive flow', 'coh'];
+    if (x < 1.0) return ['near arrest, intermittent', 'near'];
+    return [S.phi <= 0.3 ? 'iron arrested, beads sieve through' : 'arrested', 'arrest'];
+  }
+  function q0Estimate() {          // grains per tau
+    let q = Q0TAB[0][1];
+    for (let k = 0; k < Q0TAB.length - 1; k++) {
+      const [p0, a] = Q0TAB[k], [p1, b] = Q0TAB[k + 1];
+      if (S.phi >= p0 && S.phi <= p1) { q = a + (b - a) * (S.phi - p0) / (p1 - p0); break; }
+    }
+    const geo = Math.pow(Math.max(0.5, Dd() - 1.5) / 7.5, 2.5) * Math.pow(Math.tan(S.alpha * Math.PI / 180) / Math.tan(14 * Math.PI / 180), -0.35);
+    return q * geo;
+  }
+  const q0Measured = {};
+  const geoKey = () => [S.phi, S.d, S.Dmm, S.alpha, S.Hrel, S.mur, S.mu, S.e, S.rot].join('|');
+  function q0Now() { const m = q0Measured[geoKey()]; return m ? { q: m, src: 'measured' } : { q: q0Estimate(), src: 'estimated' }; }
+
+  // ------------------------------------------------------------------ worker
+  const engineSrc = $('engine-src').textContent;
+  const glue = `
+    let sim = null, running = true, waiting = false, recSent = 0, gen = 0;
+    const budget = 28;
+    onmessage = (e) => {
+      const m = e.data;
+      if (m.type === 'init') {
+        sim = HGEngine.createSim(m.cfg); recSent = 0; gen = m.gen; waiting = false;
+        postMessage({ type: 'meta', gen, N: sim.N, NFe: sim.NFe, radii: Float32Array.from(sim.radii), types: Uint8Array.from(sim.types),
+          dt: sim.dt, Rout: sim.Rout, Rtop: sim.Rtop, Hc: sim.Hc, zTop: sim.zTopWall(), Tsettle: sim.P.Tsettle });
+      } else if (m.type === 'field') { if (sim) sim.setField(m.f); }
+      else if (m.type === 'run') running = m.running;
+      else if (m.type === 'ack') waiting = false;
+    };
+    function loop() {
+      if (sim && running) {
+        const t0 = performance.now(); let n = 0;
+        while (performance.now() - t0 < budget) { sim.advance(20); n += 20; }
+        if (!waiting) {
+          const snap = sim.snapshot();
+          const rec = sim.records(); const nr = rec.slice(recSent); recSent = rec.length;
+          postMessage({ type: 'frame', gen, pos: snap.pos, mag: snap.mag, t: sim.time(), tOpen: sim.tOpen(), opened: sim.opened(),
+            counts: sim.counts(), rec: nr, steps: n, ms: performance.now() - t0, capped: sim.capped() }, [snap.pos.buffer, snap.mag.buffer]);
+          waiting = true;
+        }
+        setTimeout(loop, 0);
+      } else setTimeout(loop, 60);
+    }
+    loop();`;
+  const worker = new Worker(URL.createObjectURL(new Blob([engineSrc, '\n', glue], { type: 'text/javascript' })));
+  let gen = 0, meta = null;
+  const R = { recs: [], tOpen: -1, t: 0, lastChange: 0, counts: [0, 0], speed: 0, trace: [], points: [] };
+
+  function engineCfg() {
+    const spec = fieldSpec();
+    return Object.assign({ Dd: Dd(), alpha: S.alpha, Hbed: S.Hrel * Dd(), phi: S.phi, murFe: S.mur, murZ: 0, mu: S.mu, muw: S.mu,
+      e: S.e, rot: S.rot ? 1 : 0, sikka: S.sikka ? 1 : 0, rc: S.rc, seed: 1 + Math.floor(Math.random() * 1000), K: 2000 }, spec.f);
+  }
+  function restart() {
+    gen++; meta = null;
+    R.recs = []; R.tOpen = -1; R.t = 0; R.lastChange = 0; R.trace = [];
+    worker.postMessage({ type: 'init', cfg: engineCfg(), gen });
+    $('hud').textContent = 'filling the hourglass…';
+  }
+  function pushField() {
+    const spec = fieldSpec();
+    worker.postMessage({ type: 'field', f: spec.f });
+    R.lastChange = R.t;
+    updateReadouts();
+    updateArrows();
+    drawFlowCurve();
+  }
+  worker.onmessage = (e) => {
+    const m = e.data;
+    if (m.gen !== gen) { if (m.type === 'frame') worker.postMessage({ type: 'ack' }); return; }
+    if (m.type === 'meta') { meta = m; buildScene(); return; }
+    if (m.type === 'frame') {
+      R.t = m.t; R.tOpen = m.tOpen; R.counts = m.counts; R.capped = m.capped;
+      for (const r of m.rec) R.recs.push(r);
+      if (R.recs.length > 60000) R.recs.splice(0, 20000);
+      R.speed = 0.8 * R.speed + 0.2 * (m.steps * meta.dt / (m.ms / 1000));
+      updateGrains(m.pos, m.mag);
+      afterFrame();
+      worker.postMessage({ type: 'ack' });
+    }
+  };
+
+  // ------------------------------------------------------------------ flow analysis
+  function slope(t0, t1, col) {
+    let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (let k = R.recs.length - 1; k >= 0; k--) {
+      const r = R.recs[k]; if (r[0] < t0) break; if (r[0] > t1) continue;
+      n++; sx += r[0]; sy += r[col]; sxx += r[0] * r[0]; sxy += r[0] * r[col];
+    }
+    if (n < 5) return NaN;
+    return (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  }
+  function current() {
+    if (R.tOpen < 0) return null;
+    const tStart = Math.max(R.tOpen + 2, R.lastChange + 2), span = Math.min(6, R.t - tStart);
+    if (span < 1.5) return null;
+    const q = slope(R.t - span, R.t, 1), qf = slope(R.t - span, R.t, 2);
+    return { q, phiOut: q > 0 ? qf / q : NaN, span };
+  }
+  let lastQ0Update = 0;
+  function afterFrame() {
+    const spec = fieldSpec(), c = current();
+    // store a measured Q0 when the field is off and the flow has been steady for a while
+    if (c && c.span >= 5.5 && (spec.f.Bo === 0 || S.phi === 0) && R.t - lastQ0Update > 1) { q0Measured[geoKey()] = c.q; lastQ0Update = R.t; }
+    if (S.tmode === 5 && R.tOpen >= 0 && R.recs.length > 50) {
+      const tn = R.t; const k2 = R.recs.length - 1; let k1 = k2; while (k1 > 0 && R.recs[k1][0] > tn - 2) k1--;
+      const a = R.recs[k1], b = R.recs[k2];
+      if (b[0] - a[0] > 1.5 && tn - R.tOpen > 2) {
+        const q = (b[1] - a[1]) / (b[0] - a[0]), sMid = sOf(0.5 * (a[0] + b[0]), R.tOpen);
+        R.trace.push([Math.abs(sMid) * spec.Bn, q / q0Now().q]);
+        if (R.trace.length > 3000) R.trace.shift();
+      }
+    }
+    hudUpdate(c);
+    plotsMaybe();
+  }
+
+  // ------------------------------------------------------------------ readouts
+  const fmt = (v, n = 2) => (v === null || v === undefined || !isFinite(v)) ? '–' : v.toFixed(n);
+  function updateReadouts() {
+    const spec = fieldSpec(), mq = modelQ(spec), Bo = BoOf(spec.Bn, S.d, S.sF);
+    $('rModel').textContent = (mq.avg ? 'mean ' : '') + fmt(mq.q, 2);
+    const [rt, rc] = regime(mq.x);
+    $('rRegime').innerHTML = `<span class="chip ${rc}">${rt}</span>`;
+    $('rBo').textContent = `${fmt(Bo, 2)} (${fmt(spec.Bn, 1)} mT) \u00b7 ${fmt(probeBo(spec), 2)}`;
+    const gam = kelvinGamma(spec.f);
+    $('rGamma').textContent = spec.f.gmode === 0 ? '0 (uniform)' : `${gam >= 0 ? '+' : ''}${fmt(gam, 3)}`;
+    const q0 = q0Now();
+    $('rQ0').textContent = `${fmt(q0.q / tau(), 0)} /s (${q0.src})`;
+  }
+  function hudUpdate(c) {
+    const q0 = q0Now(), ts = tau();
+    const status = R.tOpen < 0 ? 'settling, outlet closed' : (c && c.q < 0.03 * q0.q ? 'stopped' : 'flowing');
+    const tms = (R.tOpen < 0 ? R.t : R.t - R.tOpen) * ts * 1000;
+    const spec = fieldSpec(), sNow = sOf(R.t, R.tOpen), Bnow = Math.abs(sNow) * spec.Bn;
+    $('hud').innerHTML = `t = <b>${fmt(tms, 0)} ms</b> ${R.tOpen < 0 ? '(settling)' : 'after opening'}<span class="state">${status}</span><br>` +
+      `|B| at neck <b>${fmt(Bnow, 2)} mT</b> &middot; Bo ${fmt(BoOf(Bnow, S.d, S.sF), 2)}<br>` +
+      `${meta ? meta.N : ''} grains, ${meta ? meta.NFe : ''} filings &middot; ${fmt(R.speed * ts * 1000, 1)} ms simulated per s`;
+    if (c) {
+      const gps = c.q / ts, mbar = (c.phiOut * RHO_F + (1 - c.phiOut) * RHO_Z) * Math.PI / 6 * (S.d * 0.1) ** 3;   // g per grain
+      $('rQ').textContent = `${fmt(gps, 0)} grains/s · ${fmt(gps * mbar, 2)} g/s`;
+      $('rQQ').textContent = fmt(c.q / q0.q, 2);
+    } else { $('rQ').textContent = R.tOpen < 0 ? 'outlet closed' : 'measuring…'; $('rQQ').textContent = '–'; }
+    updateReadouts();
+  }
+
+  // ------------------------------------------------------------------ plots (canvas)
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function niceStep(span, n) { const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; }
+  function setupCanvas(cv) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h); return { g, w, h };
+  }
+  function plot(cv, o) {
+    const { g, w, h } = setupCanvas(cv);
+    const L = 44, Rm = 10, T = 8, B = 20, pw = w - L - Rm, ph = h - T - B;
+    const X = (x) => L + (x - o.x0) / (o.x1 - o.x0) * pw, Y = (y) => T + (1 - (y - o.y0) / (o.y1 - o.y0)) * ph;
+    g.font = '11px ' + css('--font-mono'); g.fillStyle = css('--muted'); g.strokeStyle = css('--grid'); g.lineWidth = 1;
+    const xs = niceStep(o.x1 - o.x0, Math.max(2, Math.floor(pw / 70))), ys = niceStep(o.y1 - o.y0, 4);
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    for (let x = Math.ceil(o.x0 / xs) * xs; x <= o.x1 + 1e-9; x += xs) { g.beginPath(); g.moveTo(X(x), T); g.lineTo(X(x), T + ph); g.stroke(); g.fillText(+x.toFixed(6) + '', X(x), T + ph + 4); }
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let y = Math.ceil(o.y0 / ys) * ys; y <= o.y1 + 1e-9; y += ys) { g.beginPath(); g.moveTo(L, Y(y)); g.lineTo(L + pw, Y(y)); g.stroke(); g.fillText(+y.toFixed(6) + '', L - 5, Y(y)); }
+    g.save(); g.beginPath(); g.rect(L, T, pw, ph); g.clip();
+    for (const hl of (o.hlines || [])) { g.strokeStyle = hl.color; g.setLineDash([4, 3]); g.lineWidth = 1.2; g.beginPath(); g.moveTo(L, Y(hl.y)); g.lineTo(L + pw, Y(hl.y)); g.stroke(); g.setLineDash([]); }
+    for (const s of o.series) {
+      if (!s.pts.length) continue;
+      g.strokeStyle = s.color; g.fillStyle = s.color; g.lineWidth = s.width || 2;
+      if (s.dots) { for (const p of s.pts) { g.beginPath(); g.arc(X(p[0]), Y(p[1]), 4.2, 0, 2 * Math.PI); g.fill(); g.lineWidth = 1.5; g.strokeStyle = css('--panel'); g.stroke(); } continue; }
+      g.beginPath(); let first = true;
+      for (const p of s.pts) { if (!isFinite(p[1])) { first = true; continue; } if (first) { g.moveTo(X(p[0]), Y(p[1])); first = false; } else g.lineTo(X(p[0]), Y(p[1])); }
+      g.stroke();
+    }
+    g.restore();
+  }
+  let lastPlot = 0;
+  function plotsMaybe() { const now = performance.now(); if (now - lastPlot > 220) { lastPlot = now; drawPlots(); } }
+  function drawPlots() {
+    const ts = tau() * 1000, recs = R.recs; if (!recs.length) return;
+    const tEnd = R.t, tSpan = 40, t0 = Math.max(recs[0][0], tEnd - tSpan);
+    const toMs = (t) => (t - (R.tOpen >= 0 ? R.tOpen : 0)) * ts;
+    // flow rate, 2 tau window
+    const qs = [], ps = [], bs = []; let j = 0;
+    const spec = fieldSpec();
+    for (let k = 0; k < recs.length; k++) {
+      const r = recs[k]; if (r[0] < t0) continue;
+      while (j < k && recs[j][0] < r[0] - 2) j++;
+      if (R.tOpen >= 0 && r[0] > R.tOpen + 2 && r[0] - recs[j][0] > 1.5) qs.push([toMs(r[0]), (r[1] - recs[j][1]) / (r[0] - recs[j][0]) / tau()]);
+      bs.push([toMs(r[0]), Math.abs(r[3]) * spec.Bn]);
+    }
+    j = 0;
+    for (let k = 0; k < recs.length; k++) {
+      const r = recs[k]; if (r[0] < t0) continue;
+      while (j < k && recs[j][0] < r[0] - 4) j++;
+      const dn = r[1] - recs[j][1];
+      if (R.tOpen >= 0 && r[0] > R.tOpen + 4 && dn > 20) ps.push([toMs(r[0]), (r[2] - recs[j][2]) / dn]);
+    }
+    const x0 = toMs(t0), x1 = Math.max(toMs(tEnd), x0 + 1);
+    const q0 = q0Now().q / tau();
+    const qmax = Math.max(q0 * 1.25, ...qs.map(p => p[1]), 10);
+    plot($('cQ'), { x0, x1, y0: 0, y1: qmax, xl: 't (ms)', yl: 'grains/s', series: [{ pts: qs, color: css('--accent') }], hlines: [{ y: q0, color: css('--muted') }] });
+    const bmax = Math.max(1, spec.Bn * (S.tmode === 4 ? Math.abs(S.sdc) + S.sac : 1) * 1.15);
+    plot($('cB'), { x0, x1, y0: 0, y1: bmax, xl: 't (ms)', yl: 'mT', series: [{ pts: bs, color: css('--field') }] });
+    plot($('cP'), { x0, x1, y0: 0, y1: 1, xl: 't (ms)', yl: 'iron fraction', series: [{ pts: ps, color: css('--aqua') }], hlines: [{ y: S.phi, color: css('--muted') }] });
+    $('pQ').textContent = qs.length ? `${qs[qs.length - 1][1].toFixed(0)} /s` : '–';
+    $('pB').textContent = bs.length ? `${bs[bs.length - 1][1].toFixed(2)} mT` : '–';
+    $('pP').textContent = ps.length ? ps[ps.length - 1][1].toFixed(2) : '–';
+    drawFlowCurve();
+  }
+  function drawFlowCurve() {
+    const spec = fieldSpec();
+    const Bmax = Math.max(2, spec.Bn * 1.3, ...R.points.map(p => p[0] * 1.1), ...R.trace.map(p => p[0] * 1.05));
+    const model = [];
+    const gamPerBo = spec.f.Bo > 0 ? kelvinGamma(spec.f) / spec.f.Bo : 0, rp = probeRatio(spec.f);
+    for (let k = 0; k <= 80; k++) {
+      const B = Bmax * k / 80, Bo = BoOf(B, S.d, S.sF);
+      const x = modelX(Bo * rp, spec.vertical), g = gamPerBo * BoOf(B * (spec.f.Bo > 0 ? 1 : 0), S.d, S.sF) * S.phi * RHO_F / rhoBar();
+      model.push([B, Math.sqrt(Math.max(0, 1 + g - x))]);
+    }
+    plot($('cF'), { x0: 0, x1: Bmax, y0: 0, y1: 1.2, xl: '|B| at neck (mT)', yl: 'Q/Q0',
+      series: [{ pts: model, color: css('--muted'), width: 1.6 }, { pts: R.trace, color: css('--accent'), width: 1.4 }, { pts: R.points, color: css('--accent'), dots: true }] });
+  }
+
+  // ------------------------------------------------------------------ 3D view (plain WebGL: sphere impostors + lines)
+  const canvas = $('view');
+  const gl = canvas.getContext('webgl2', { antialias: true }) || canvas.getContext('webgl', { antialias: true });
+  const GL2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+  const fragDepthExt = !GL2 && gl ? gl.getExtension('EXT_frag_depth') : null;
+  function compile(vs, fs) {
+    const mk = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); return sh; };
+    const pr = gl.createProgram(); gl.attachShader(pr, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr)); return pr;
+  }
+  const V300 = GL2 ? '#version 300 es\n' : '';
+  const IN = GL2 ? 'in' : 'attribute', VOUT = GL2 ? 'out' : 'varying', FIN = GL2 ? 'in' : 'varying';
+  const sphVS = V300 + `${IN} vec3 a_pos; ${IN} float a_rad; ${IN} vec3 a_col;
+    uniform mat4 u_view, u_proj; uniform float u_scale;
+    ${VOUT} vec3 v_col; ${VOUT} vec3 v_c; ${VOUT} float v_r;
+    void main(){ vec4 vp = u_view * vec4(a_pos, 1.0); v_c = vp.xyz; v_r = a_rad; v_col = a_col;
+      gl_Position = u_proj * vp; gl_PointSize = max(1.5, 2.0 * a_rad * u_scale / max(0.1, -vp.z)); }`;
+  const sphFS = (GL2 ? V300 + 'precision highp float;\nout vec4 o_col;\n' : (fragDepthExt ? '#extension GL_EXT_frag_depth : enable\n' : '') + 'precision highp float;\n') +
+    `${FIN} vec3 v_col; ${FIN} vec3 v_c; ${FIN} float v_r; uniform mat4 u_proj; uniform vec3 u_light;
+    void main(){ vec2 p = gl_PointCoord * 2.0 - 1.0; p.y = -p.y; float r2 = dot(p, p); if (r2 > 1.0) discard;
+      vec3 n = vec3(p, sqrt(1.0 - r2)); vec4 cl = u_proj * vec4(v_c + n * v_r, 1.0);
+      ${GL2 ? 'gl_FragDepth = 0.5 * cl.z / cl.w + 0.5;' : (fragDepthExt ? 'gl_FragDepthEXT = 0.5 * cl.z / cl.w + 0.5;' : '')}
+      float df = max(dot(n, u_light), 0.0); vec3 h = normalize(u_light + vec3(0.0, 0.0, 1.0)); float sp = pow(max(dot(n, h), 0.0), 36.0);
+      vec3 c = v_col * (0.38 + 0.72 * df) + vec3(0.28) * sp; c *= 0.85 + 0.15 * n.z;
+      ${GL2 ? 'o_col' : 'gl_FragColor'} = vec4(c, 1.0); }`;
+  const linVS = V300 + `${IN} vec3 a_pos; ${IN} vec4 a_col; uniform mat4 u_view, u_proj; ${VOUT} vec4 v_col;
+    void main(){ v_col = a_col; gl_Position = u_proj * u_view * vec4(a_pos, 1.0); }`;
+  const linFS = (GL2 ? V300 + 'precision mediump float;\nout vec4 o_col;\n' : 'precision mediump float;\n') +
+    `${FIN} vec4 v_col; void main(){ ${GL2 ? 'o_col' : 'gl_FragColor'} = v_col; }`;
+  let progS = null, progL = null;
+  if (gl) {
+    try { progS = compile(sphVS, sphFS); progL = compile(linVS, linFS); }
+    catch (err) { console.error(err); $('hud').textContent = 'WebGL shader error: ' + err.message; }
+  } else { $('hud').textContent = 'This browser has no WebGL; the plots still run.'; }
+  const bufS = gl ? gl.createBuffer() : null, bufL = gl ? gl.createBuffer() : null, bufT = gl ? gl.createBuffer() : null;
+  let sphData = new Float32Array(0), sphCount = 0;
+  let staticLines = new Float32Array(0), staticTris = new Float32Array(0), dynLines = [];
+  // matrices (column-major)
+  function perspective(fovy, asp, n, f) { const t = 1 / Math.tan(fovy / 2), nf = 1 / (n - f);
+    return new Float32Array([t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) * nf, -1, 0, 0, 2 * f * n * nf, 0]); }
+  function lookAt(e, c, u) {
+    let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2]; let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    return new Float32Array([xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0, -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1]);
+  }
+  const cam = { r: 60, az: 0.0, el: 0.12, target: [0, 0, 6], fov: 32 * Math.PI / 180 };
+  function resetView() { if (!meta) return; cam.r = 4.2 * meta.Rtop + 34; cam.az = 0.0; cam.el = 0.10; cam.target = [0, 0, 0.38 * meta.Hc - 2]; }
+  let idxFe = [], idxZ = [];
+  const colIron = [0.36, 0.42, 0.50], colBead = [0.94, 0.91, 0.84], colHot = [1.0, 0.54, 0.30];
+  function addLine(arr, a, b, c) { arr.push(a[0], a[1], a[2], c[0], c[1], c[2], c[3], b[0], b[1], b[2], c[0], c[1], c[2], c[3]); }
+  function buildScene() {
+    const N = meta.N; idxFe = []; idxZ = [];
+    for (let i = 0; i < N; i++) (meta.types[i] ? idxFe : idxZ).push(i);
+    sphData = new Float32Array(7 * N);
+    // static geometry: cone generators and rings (lines), translucent cone (triangles)
+    const L = [], T = [], ta = Math.tan(S.alpha * Math.PI / 180), Hl = 14, zt = Math.min(meta.zTop, meta.Hc + 3);
+    const wc = [0.68, 0.76, 0.86, 0.55], wf = [0.68, 0.76, 0.86, 0.22];
+    const prof = [[meta.Rout + 0.15, -0.6], [meta.Rout, 0], [meta.Rtop, meta.Hc], [meta.Rtop, zt]];
+    const low = [[meta.Rout + 0.15, -0.6], [meta.Rout + 0.15 + Hl * ta, -0.6 - Hl]];
+    const nAz = 64;
+    for (const [pr, col] of [[prof, wc], [low, wf]]) {
+      for (let k = 0; k < nAz; k++) {
+        const a0 = 2 * Math.PI * k / nAz, a1 = 2 * Math.PI * (k + 1) / nAz;
+        for (let s = 0; s < pr.length; s++) {   // ring at each profile point
+          const [r, z] = pr[s]; addLine(L, [r * Math.cos(a0), r * Math.sin(a0), z], [r * Math.cos(a1), r * Math.sin(a1), z], col);
+        }
+        if (k % 8 === 0) for (let s = 0; s < pr.length - 1; s++) {
+          const [r0, z0] = pr[s], [r1, z1] = pr[s + 1];
+          addLine(L, [r0 * Math.cos(a0), r0 * Math.sin(a0), z0], [r1 * Math.cos(a0), r1 * Math.sin(a0), z1], col);
+        }
+        if (pr === prof) for (let s = 0; s < pr.length - 1; s++) {     // translucent surface
+          const [r0, z0] = pr[s], [r1, z1] = pr[s + 1], c = [0.62, 0.71, 0.80, 0.07];
+          const p00 = [r0 * Math.cos(a0), r0 * Math.sin(a0), z0], p01 = [r0 * Math.cos(a1), r0 * Math.sin(a1), z0];
+          const p10 = [r1 * Math.cos(a0), r1 * Math.sin(a0), z1], p11 = [r1 * Math.cos(a1), r1 * Math.sin(a1), z1];
+          for (const q of [p00, p10, p11, p00, p11, p01]) T.push(q[0], q[1], q[2], c[0], c[1], c[2], c[3]);
+        }
+      }
+    }
+    staticLines = new Float32Array(L); staticTris = new Float32Array(T);
+    resetView();
+    updateArrows();
+    drawFlowCurve();
+  }
+  let lastPos = null, lastMag = null;
+  function updateGrains(pos, mag) { lastPos = pos; lastMag = mag; }
+  function fillSpheres() {
+    if (!lastPos || !meta) return;
+    const pos = lastPos, mag = lastMag, d = sphData; let n = 0;
+    for (let i = 0; i < meta.N; i++) {
+      const y = pos[3 * i + 1]; if (S.cut && Math.abs(y) > 1.3) continue;
+      const o = 7 * n++;
+      d[o] = pos[3 * i]; d[o + 1] = y; d[o + 2] = pos[3 * i + 2]; d[o + 3] = meta.radii[i];
+      let c = meta.types[i] ? colIron : colBead;
+      if (meta.types[i] && S.magColor) { const v = Math.max(0, Math.min(1, (mag[i] - 0.8) / 1.4));
+        d[o + 4] = c[0] + (colHot[0] - c[0]) * v; d[o + 5] = c[1] + (colHot[1] - c[1]) * v; d[o + 6] = c[2] + (colHot[2] - c[2]) * v; }
+      else { d[o + 4] = c[0]; d[o + 5] = c[1]; d[o + 6] = c[2]; }
+    }
+    sphCount = n;
+  }
+  // field arrows on a grid in the x-z plane, and glyphs of the source
+  let arrowGrid = [], glyphLines = [];
+  function updateArrows() {
+    if (!meta) return;
+    const spec = fieldSpec(), f = spec.f, u = [0, 0, 0];
+    arrowGrid = [];
+    const xs = [-1, -0.5, 0, 0.5, 1].map(v => v * (meta.Rtop + 3)), zs = [-9, -3, 3, 9, 15];
+    for (const x of xs) for (const z of zs) {
+      fieldU(f, x, 0, z, u); const un = Math.hypot(u[0], u[1], u[2]);
+      if (un > 0) arrowGrid.push({ p: [x, -0.02, z], d: [u[0] / un, u[1] / un, u[2] / un], un });
+    }
+    glyphLines = []; const gc = [0.86, 0.6, 0.38, 0.9];
+    const circle = (center, axis, R) => {   // circle of radius R around the axis (unit) through center
+      const a = axis, t1 = Math.abs(a[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+      let e1 = [a[1] * t1[2] - a[2] * t1[1], a[2] * t1[0] - a[0] * t1[2], a[0] * t1[1] - a[1] * t1[0]]; const l = Math.hypot(...e1); e1 = e1.map(v => v / l);
+      const e2 = [a[1] * e1[2] - a[2] * e1[1], a[2] * e1[0] - a[0] * e1[2], a[0] * e1[1] - a[1] * e1[0]];
+      for (let k = 0; k < 72; k++) { const t0 = 2 * Math.PI * k / 72, t1b = 2 * Math.PI * (k + 1) / 72;
+        const P = (t) => [center[0] + R * (Math.cos(t) * e1[0] + Math.sin(t) * e2[0]), center[1] + R * (Math.cos(t) * e1[1] + Math.sin(t) * e2[1]), center[2] + R * (Math.cos(t) * e1[2] + Math.sin(t) * e2[2])];
+        addLine(glyphLines, P(t0), P(t1b), gc); }
+    };
+    if (f.gmode === 3) {
+      const ax = S.qaxis ? [1, 0, 0] : [0, 0, 1], Rc = meta.Rtop + 7, sep = 0.5 * Rc;
+      for (const sg of [-1, 1]) { const c = ax.map(v => v * (f.q + sg * sep)); circle(c, ax, Rc); circle(c, ax, Rc + 0.6); }
+    } else if (f.gmode === 4) {
+      const w = S.wdir ? [0, 1, 0] : [0, 0, 1], c = [f.xw, 0, f.zw];
+      for (const off of [-0.25, 0, 0.25]) addLine(glyphLines, [c[0] + off - 40 * w[0], c[1] - 40 * w[1], c[2] - 40 * w[2] + (S.wdir ? 0 : 12)], [c[0] + off + 40 * w[0], c[1] + 40 * w[1], c[2] + 40 * w[2] + (S.wdir ? 0 : 12)], gc);
+    } else if (f.gmode === 2) {
+      const z0 = f.zm, hw = 2.2;
+      for (const [zz, col] of [[z0 + hw, [0.85, 0.3, 0.25, 0.95]], [z0, [0.25, 0.45, 0.8, 0.95]]]) {
+        for (let k = 0; k < 4; k++) { const a0 = Math.PI / 2 * k, a1 = a0 + Math.PI / 2;
+          const p = (a, z) => [hw * Math.cos(a), hw * Math.sin(a), z];
+          addLine(glyphLines, p(a0, zz), p(a1, zz), col); addLine(glyphLines, p(a0, zz - hw), p(a1, zz - hw), col); addLine(glyphLines, p(a0, zz), p(a0, zz - hw), col); }
+      }
+    }
+  }
+  function arrowLines() {
+    const out = []; if (!S.arrows) return out;
+    const s = sOf(R.t, R.tOpen), sg = s < 0 ? -1 : 1, col = [1.0, 0.55, 0.30, 0.95];
+    for (const a of arrowGrid) {
+      const L = Math.min(4.4, 2.8 * a.un * Math.abs(s)); if (L < 0.3) continue;
+      const d = a.d.map(v => v * sg), tip = [a.p[0] + d[0] * L, a.p[1] + d[1] * L, a.p[2] + d[2] * L];
+      addLine(out, a.p, tip, col);
+      // head: two short lines in the x-z plane
+      const px = -d[2], pz = d[0], hl = Math.min(1.0, 0.35 * L);
+      addLine(out, tip, [tip[0] - d[0] * hl + px * 0.5 * hl, tip[1], tip[2] - d[2] * hl + pz * 0.5 * hl], col);
+      addLine(out, tip, [tip[0] - d[0] * hl - px * 0.5 * hl, tip[1], tip[2] - d[2] * hl - pz * 0.5 * hl], col);
+    }
+    return out;
+  }
+  function bindAttribs(prog, layout, stride) {
+    let off = 0;
+    for (const [name, size] of layout) { const loc = gl.getAttribLocation(prog, name); if (loc >= 0) { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride * 4, off * 4); } off += size; }
+  }
+  function drawLines(view, proj, data, mode) {
+    if (!data.length) return;
+    gl.useProgram(progL);
+    gl.uniformMatrix4fv(gl.getUniformLocation(progL, 'u_view'), false, view); gl.uniformMatrix4fv(gl.getUniformLocation(progL, 'u_proj'), false, proj);
+    const buf = mode === gl.TRIANGLES ? bufT : bufL;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    bindAttribs(progL, [['a_pos', 3], ['a_col', 4]], 7);
+    gl.drawArrays(mode, 0, data.length / 7);
+  }
+  // camera interaction
+  let drag = null;
+  canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, az: cam.az, el: cam.el }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', (e) => { if (!drag) return; cam.az = drag.az - (e.clientX - drag.x) * 0.008; cam.el = Math.max(-1.3, Math.min(1.4, drag.el + (e.clientY - drag.y) * 0.006)); });
+  canvas.addEventListener('pointerup', () => { drag = null; });
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.r = Math.max(12, Math.min(260, cam.r * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+  function render() {
+    if (!gl || !progS) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+    if (!w || !h) return;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0.118, 0.153, 0.2, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (!meta) return;
+    const c = Math.cos(cam.el), eye = [cam.target[0] + cam.r * c * Math.sin(cam.az), cam.target[1] - cam.r * c * Math.cos(cam.az), cam.target[2] + cam.r * Math.sin(cam.el)];
+    const view = lookAt(eye, cam.target, [0, 0, 1]), proj = perspective(cam.fov, w / h, 1, 1000);
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.BLEND);
+    fillSpheres();
+    if (sphCount) {
+      gl.useProgram(progS);
+      gl.uniformMatrix4fv(gl.getUniformLocation(progS, 'u_view'), false, view); gl.uniformMatrix4fv(gl.getUniformLocation(progS, 'u_proj'), false, proj);
+      gl.uniform1f(gl.getUniformLocation(progS, 'u_scale'), proj[5] * h / 2);
+      const lv = [0.45, 0.55, 0.70], ln = Math.hypot(...lv); gl.uniform3f(gl.getUniformLocation(progS, 'u_light'), lv[0] / ln, lv[1] / ln, lv[2] / ln);
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufS); gl.bufferData(gl.ARRAY_BUFFER, sphData.subarray(0, 7 * sphCount), gl.DYNAMIC_DRAW);
+      bindAttribs(progS, [['a_pos', 3], ['a_rad', 1], ['a_col', 3]], 7);
+      gl.drawArrays(gl.POINTS, 0, sphCount);
+    }
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    if (!S.cut) drawLines(view, proj, staticTris, gl.TRIANGLES);
+    drawLines(view, proj, staticLines, gl.LINES);
+    drawLines(view, proj, new Float32Array(glyphLines), gl.LINES);
+    gl.disable(gl.DEPTH_TEST);
+    drawLines(view, proj, new Float32Array(arrowLines()), gl.LINES);
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+  }
+  window.addEventListener('resize', () => { drawPlots(); drawFlowCurve(); });
+  function frame() { render(); requestAnimationFrame(frame); }
+
+  // ------------------------------------------------------------------ controls
+  const ctl = [
+    ['sPhi', 'phi', (v) => `${(100 * v).toFixed(0)}% (${(100 * v * RHO_F / (v * RHO_F + (1 - v) * RHO_Z)).toFixed(0)}% by mass)`, true],
+    ['sD', 'd', (v) => `${v.toFixed(2)} mm  (D/d = ${(S.Dmm / v).toFixed(1)}, τ = ${(tauOf(v) * 1000).toFixed(1)} ms)`, true],
+    ['sSF', 'sF', (v) => v.toFixed(1), false],
+    ['sMur', 'mur', (v) => v.toFixed(2), true],
+    ['sOut', 'Dmm', (v) => `${v.toFixed(1)} mm`, true],
+    ['sAlpha', 'alpha', (v) => `${v.toFixed(0)}°`, true],
+    ['sH', 'Hrel', (v) => `${v.toFixed(1)} D`, true],
+    ['sB0', 'B0', (v) => `${v.toFixed(1)} mT`, false],
+    ['sTheta', 'theta', (v) => `${v.toFixed(0)}°`, false],
+    ['sG', 'G', (v) => `${v.toFixed(2)} mT/mm`, false],
+    ['sZn', 'zn', (v) => `${v.toFixed(1)} mm  (|B| = ${(S.G * Math.abs(v)).toFixed(2)} mT)`, false],
+    ['sI', 'I', (v) => `${v.toFixed(0)} A  (|B| = ${(0.2 * v / S.rw).toFixed(2)} mT)`, false],
+    ['sRw', 'rw', (v) => `${v.toFixed(1)} mm`, false],
+    ['sBm', 'Bm', (v) => `${v.toFixed(1)} mT`, false],
+    ['sHm', 'hm', (v) => `${v.toFixed(1)} mm`, false],
+    ['sF', 'f', (v) => `${v.toFixed(1)} Hz  (fτ = ${(v * tauOf(S.d)).toFixed(3)})`, false],
+    ['sDc', 'sdc', (v) => `${v >= 0 ? '+' : ''}${v.toFixed(2)} B₀`, false],
+    ['sAc', 'sac', (v) => `${v.toFixed(2)} B₀`, false],
+    ['sRamp', 'rampMs', (v) => `${v.toFixed(0)} ms`, true],
+    ['sMu', 'mu', (v) => v.toFixed(2), true],
+    ['sE', 'e', (v) => v.toFixed(2), true],
+    ['sRc', 'rc', (v) => `${v.toFixed(1)} d`, true]
+  ];
+  let resetTimer = null;
+  function scheduleReset() { clearTimeout(resetTimer); resetTimer = setTimeout(restart, 350); }
+  function refreshOutputs() { for (const [id, key, f] of ctl) { const o = $('o' + id.slice(1)); if (o) o.textContent = f(S[key]); } }
+  for (const [id, key, , needsReset] of ctl) {
+    const el = $(id);
+    el.addEventListener('input', () => { S[key] = parseFloat(el.value); refreshOutputs(); if (needsReset) scheduleReset(); else pushField(); });
+  }
+  $('sQaxis').addEventListener('change', (e) => { S.qaxis = +e.target.value; pushField(); });
+  $('sWdir').addEventListener('change', (e) => { S.wdir = +e.target.value; pushField(); });
+  function segBind(id, key, after) {
+    const seg = $(id);
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      S[key] = +b.dataset.v;
+      for (const x of seg.querySelectorAll('button')) x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+      after();
+    });
+  }
+  function showSource() {
+    $('srcUniform').hidden = S.src !== 0; $('srcQuad').hidden = S.src !== 3; $('srcWire').hidden = S.src !== 4; $('srcMagnet').hidden = S.src !== 2;
+  }
+  function showTime() {
+    $('tFreq').hidden = !(S.tmode === 1 || S.tmode === 2 || S.tmode === 4); $('tDcac').hidden = S.tmode !== 4; $('tRamp').hidden = S.tmode !== 5;
+  }
+  segBind('srcSeg', 'src', () => { showSource(); pushField(); });
+  segBind('timeSeg', 'tmode', () => { showTime(); if (S.tmode === 5) restart(); else pushField(); });
+  for (const [id, key] of [['cMut', 'mutual'], ['cKel', 'kelvin']]) $(id).addEventListener('change', (e) => { S[key] = e.target.checked; pushField(); });
+  for (const [id, key] of [['cSik', 'sikka'], ['cRot', 'rot']]) $(id).addEventListener('change', (e) => { S[key] = e.target.checked; scheduleReset(); });
+  $('bRun').addEventListener('click', () => { S.running = !S.running; worker.postMessage({ type: 'run', running: S.running }); $('bRun').textContent = S.running ? 'Pause' : 'Run'; });
+  $('bReset').addEventListener('click', restart);
+  $('bRecord').addEventListener('click', () => {
+    const c = current(); if (!c) return;
+    const spec = fieldSpec();
+    const Beff = S.tmode === 0 ? spec.Bn : spec.Bn * Math.sqrt(S.tmode === 4 ? S.sdc * S.sdc + 0.5 * S.sac * S.sac : 0.5);
+    R.points.push([Beff, c.q / q0Now().q]); drawFlowCurve();
+  });
+  function toggle(id, key, after) { $(id).addEventListener('click', () => { S[key] = !S[key]; $(id).setAttribute('aria-pressed', S[key] ? 'true' : 'false'); if (after) after(); }); }
+  toggle('bCut', 'cut'); toggle('bMag', 'magColor'); toggle('bArrows', 'arrows');
+  $('bView').addEventListener('click', resetView);
+  document.addEventListener('visibilitychange', () => worker.postMessage({ type: 'run', running: S.running && !document.hidden }));
+
+  refreshOutputs(); showSource(); showTime();
+  restart();
+  requestAnimationFrame(frame);
+})();
+
+</script>
+
+</body>
+</html>
